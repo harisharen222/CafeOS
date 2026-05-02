@@ -5,6 +5,8 @@ struct DashboardView: View {
     @EnvironmentObject var inventoryVM: InventoryViewModel
     @EnvironmentObject var supplierVM: SupplierViewModel
     @EnvironmentObject var orderVM: OrderViewModel
+    
+    @State private var notificationScheduled: Bool = false
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -140,6 +142,19 @@ struct DashboardView: View {
                     .cornerRadius(12)
                 }
                 .padding(.horizontal)
+                
+                // Notification Badge
+                if notificationScheduled {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bell.badge.fill")
+                            .foregroundColor(.brown)
+                        Text("Daily 8 AM low-stock alert is active")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                }
             }
             .padding(.vertical)
         }
@@ -157,6 +172,10 @@ struct DashboardView: View {
             inventoryVM.startListening()
             await supplierVM.fetchSuppliers()
             await orderVM.fetchOrders()
+            
+            NotificationService.shared.hasPendingLowStockAlert { scheduled in
+                notificationScheduled = scheduled
+            }
         }
     }
 }

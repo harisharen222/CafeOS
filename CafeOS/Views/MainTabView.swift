@@ -24,5 +24,9 @@ struct MainTabView: View {
             .tabItem { Label("Orders", systemImage: "cart.fill") }
         }
         .accentColor(.brown)
+        .task {
+            // Request notification permission on first launch after login
+            _ = await NotificationService.shared.requestPermission()
+        }
     }
 }

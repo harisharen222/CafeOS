@@ -20,7 +20,10 @@ class InventoryViewModel: ObservableObject {
             guard let self else { return }
             self.items = fetched.sorted { $0.name < $1.name }
             self.isLoading = false
-            self.handleLowStockNotifications(for: fetched)
+            
+            // Auto-schedule notification whenever inventory changes
+            let lowItems = self.items.filter { $0.isLowStock }
+            NotificationService.shared.scheduleLowStockAlert(for: lowItems)
         }
     }
 
@@ -65,11 +68,5 @@ class InventoryViewModel: ObservableObject {
         }
     }
 
-    // MARK: — Notification stub (Day 3)
-    private func handleLowStockNotifications(for items: [InventoryItem]) {
-        let low = items.filter { $0.isLowStock }
-        if !low.isEmpty {
-            print("[CafeOS] Low stock: \(low.map { $0.name }.joined(separator: ", "))")
-        }
-    }
+
 }
