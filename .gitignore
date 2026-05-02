@@ -1,0 +1,17 @@
+# Firebase — never commit
+GoogleService-Info.plist
+
+# API Keys — never commit
+CafeOS/Utilities/Secrets.swift
+
+# Xcode
+*.xcuserstate
+*.xcuserdatad/
+xcuserdata/
+.DS_Store
+build/
+DerivedData/
+
+# SPM
+.build/
+*.resolved
