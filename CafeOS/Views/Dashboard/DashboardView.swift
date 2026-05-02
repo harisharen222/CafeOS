@@ -155,6 +155,17 @@ struct DashboardView: View {
                     }
                     .padding(.horizontal)
                 }
+                
+                #if DEBUG
+                Button("Seed Demo Data") {
+                    Task {
+                        await SeedData.populate(firestoreService: FirestoreService())
+                    }
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding()
+                #endif
             }
             .padding(.vertical)
         }
