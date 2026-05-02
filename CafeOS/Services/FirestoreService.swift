@@ -4,7 +4,7 @@ import FirebaseFirestore
 class FirestoreService {
     private let db = Firestore.firestore()
 
-    // MARK: — One-time fetch (Suppliers, Orders)
+    // MARK: — One-time fetch
     func fetch<T: Codable>(_ collection: String) async throws -> [T] {
         do {
             let snapshot = try await db.collection(collection).getDocuments()
@@ -53,13 +53,19 @@ class FirestoreService {
         }
     }
 
-    // MARK: — Transaction: Mark Order Received
-    // Idempotent — reads status before writing. Double-tap safe.
-    func markOrderReceived(
-        orderID: String,
-        itemID: String,
-        quantity: Double
-    ) async throws {
+    // MARK: — Append itemID to supplier's itemsSupplied (arrayUnion — idempotent)
+    func addItemToSupplier(supplierID: String, itemID: String) async throws {
+        do {
+            try await db.collection(Constants.Firestore.suppliers)
+                .document(supplierID)
+                .updateData(["itemsSupplied": FieldValue.arrayUnion([itemID])])
+        } catch {
+            throw AppError.firestoreWriteFailed
+        }
+    }
+
+    // MARK: — Transaction: Mark Order Received (idempotent — double-tap safe)
+    func markOrderReceived(orderID: String, itemID: String, quantity: Double) async throws {
         let orderRef = db.collection(Constants.Firestore.orders).document(orderID)
         let itemRef  = db.collection(Constants.Firestore.inventory).document(itemID)
 
@@ -68,23 +74,26 @@ class FirestoreService {
                 let orderDoc: DocumentSnapshot
                 do {
                     orderDoc = try transaction.getDocument(orderRef)
-                } catch let e as NSError {
-                    errorPointer?.pointee = e
+                } catch let fetchError as NSError {
+                    errorPointer?.pointee = fetchError
                     return nil
                 }
-                // Only proceed if still pending — prevents double-increment
-                guard orderDoc.data()?["status"] as? String == OrderStatus.pending.rawValue
-                else { return nil }
 
-                transaction.updateData(
-                    ["status": OrderStatus.received.rawValue,
-                     "receivedDate": Timestamp()],
-                    forDocument: orderRef
-                )
-                transaction.updateData(
-                    ["quantity": FieldValue.increment(quantity)],
-                    forDocument: itemRef
-                )
+                // Idempotency check — if already received or cancelled, do nothing
+                guard let currentStatus = orderDoc.data()?["status"] as? String,
+                      currentStatus == OrderStatus.pending.rawValue else {
+                    return nil
+                }
+
+                transaction.updateData([
+                    "status": OrderStatus.received.rawValue,
+                    "receivedDate": Timestamp(date: Date())
+                ], forDocument: orderRef)
+
+                transaction.updateData([
+                    "quantity": FieldValue.increment(quantity)
+                ], forDocument: itemRef)
+
                 return nil
             }
         } catch {
