@@ -1,26 +1,20 @@
 import SwiftUI
 import Firebase
 
-class AppDelegate: NSObject, UIApplicationDelegate {
-  func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
-  ) -> Bool {
-    FirebaseApp.configure()
-    return true
-  }
-}
-
 @main
 struct CafeOSApp: App {
-    
-  @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var appState = AppState()
 
-  var body: some Scene {
-    WindowGroup {
-      NavigationView {
-        ContentView()
-      }
+    init() {
+        FirebaseApp.configure()
     }
-  }
+
+    var body: some Scene {
+        WindowGroup {
+            // Day 2: replace with auth-gated routing
+            // For now route directly to tab view for development
+            MainTabView()
+                .environmentObject(appState)
+        }
+    }
 }
