@@ -6,7 +6,7 @@ enum InventoryFormMode {
 }
 
 struct InventoryFormView: View {
-    @ObservedObject var viewModel: InventoryViewModel
+    @EnvironmentObject var inventoryVM: InventoryViewModel
     let mode: InventoryFormMode
     @Environment(\.dismiss) private var dismiss
 
@@ -20,20 +20,18 @@ struct InventoryFormView: View {
     @State private var supplierName = ""
     @State private var isSaving = false
 
-    // Validation
-    @State private var nameError: String? = nil
-    @State private var quantityError: String? = nil
+    @FocusState private var focusedField: FormField?
+    enum FormField { case name, quantity, threshold, cost }
 
-    private var isEditing: Bool {
-        if case .edit = mode { return true }
-        return false
-    }
+    private var isEditing: Bool { if case .edit = mode { return true }; return false }
+
+    private var quantity: Double { Double(quantityText) ?? -1 }
+    private var threshold: Double { Double(thresholdText) ?? -1 }
+    private var cost: Double { Double(costText) ?? -1 }
 
     private var isFormValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-        (Double(quantityText) ?? -1) >= 0 &&
-        (Double(thresholdText) ?? -1) >= 0 &&
-        (Double(costText) ?? -1) >= 0
+        quantity >= 0 && threshold >= 0 && cost >= 0
     }
 
     var body: some View {
@@ -42,9 +40,9 @@ struct InventoryFormView: View {
                 Section("Item Details") {
                     VStack(alignment: .leading, spacing: 4) {
                         TextField("Item name (required)", text: $name)
-                            .onChange(of: name) { _, _ in validateName() }
-                        if let err = nameError {
-                            Text(err).font(.caption).foregroundStyle(.red)
+                            .focused($focusedField, equals: .name)
+                        if name.trimmingCharacters(in: .whitespaces).isEmpty && focusedField != .name {
+                            Text("Name cannot be empty.").font(.caption).foregroundStyle(.red)
                         }
                     }
                     Picker("Category", selection: $category) {
@@ -56,21 +54,37 @@ struct InventoryFormView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         TextField("Current quantity", text: $quantityText)
                             .keyboardType(.decimalPad)
-                            .onChange(of: quantityText) { _, _ in validateQuantity() }
-                        if let err = quantityError {
-                            Text(err).font(.caption).foregroundStyle(.red)
+                            .focused($focusedField, equals: .quantity)
+                        if quantity < 0 && focusedField != .quantity {
+                            Text("Quantity must be 0 or greater.").font(.caption).foregroundStyle(.red)
+                        }
+                        if quantity >= 0 && threshold >= 0 && quantity < threshold {
+                            Text("⚠️ Quantity is below the reorder threshold.")
+                                .font(.caption).foregroundStyle(.orange)
                         }
                     }
                     Picker("Unit", selection: $unit) {
                         ForEach(Constants.Units.all, id: \.self) { Text($0).tag($0) }
                     }
-                    TextField("Minimum threshold", text: $thresholdText)
-                        .keyboardType(.decimalPad)
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("Minimum threshold", text: $thresholdText)
+                            .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .threshold)
+                        if threshold < 0 && focusedField != .threshold {
+                            Text("Threshold cannot be negative.").font(.caption).foregroundStyle(.red)
+                        }
+                    }
                 }
 
                 Section("Pricing") {
-                    TextField("Cost per unit", text: $costText)
-                        .keyboardType(.decimalPad)
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("Cost per unit", text: $costText)
+                            .keyboardType(.decimalPad)
+                            .focused($focusedField, equals: .cost)
+                        if cost < 0 && focusedField != .cost {
+                            Text("Cost cannot be negative.").font(.caption).foregroundStyle(.red)
+                        }
+                    }
                 }
 
                 Section("Supplier (Optional)") {
@@ -81,16 +95,12 @@ struct InventoryFormView: View {
             .navigationTitle(isEditing ? "Edit Item" : "Add Item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if isSaving {
-                        ProgressView()
-                    } else {
+                    if isSaving { ProgressView() }
+                    else {
                         Button("Save") { save() }
-                            .disabled(!isFormValid)
-                            .tint(.brown)
+                            .disabled(!isFormValid).tint(.brown)
                     }
                 }
             }
@@ -98,66 +108,38 @@ struct InventoryFormView: View {
         }
     }
 
-    // MARK: — Helpers
-    private func validateName() {
-        nameError = name.trimmingCharacters(in: .whitespaces).isEmpty
-            ? "Name is required" : nil
-    }
-
-    private func validateQuantity() {
-        guard let q = Double(quantityText) else {
-            quantityError = "Enter a valid number"; return
-        }
-        quantityError = q < 0 ? "Quantity must be 0 or more" : nil
-    }
-
     private func populateIfEditing() {
         guard case .edit(let item) = mode else { return }
-        name          = item.name
-        category      = item.category
-        quantityText  = String(item.quantity)
-        unit          = item.unit
+        name = item.name; category = item.category
+        quantityText = String(item.quantity); unit = item.unit
         thresholdText = String(item.minimumThreshold)
-        costText      = String(item.costPerUnit)
-        supplierID    = item.supplierID ?? ""
-        supplierName  = item.supplierName ?? ""
+        costText = String(item.costPerUnit)
+        supplierID = item.supplierID ?? ""; supplierName = item.supplierName ?? ""
     }
 
     private func save() {
-        validateName(); validateQuantity()
         guard isFormValid else { return }
-
         isSaving = true
-        let qty  = Double(quantityText) ?? 0
-        let thr  = Double(thresholdText) ?? 0
-        let cost = Double(costText) ?? 0
-
         Task {
             switch mode {
             case .add:
                 let newItem = InventoryItem(
-                    name: name, category: category,
-                    quantity: qty, unit: unit,
-                    minimumThreshold: thr,
+                    name: name, category: category, quantity: quantity,
+                    unit: unit, minimumThreshold: threshold,
                     supplierID: supplierID.isEmpty ? nil : supplierID,
                     supplierName: supplierName.isEmpty ? nil : supplierName,
                     costPerUnit: cost
                 )
-                await viewModel.addItem(newItem)
+                await inventoryVM.addItem(newItem)
             case .edit(var item):
-                item.name            = name
-                item.category        = category
-                item.quantity        = qty
-                item.unit            = unit
-                item.minimumThreshold = thr
-                item.costPerUnit     = cost
-                item.supplierID      = supplierID.isEmpty ? nil : supplierID
-                item.supplierName    = supplierName.isEmpty ? nil : supplierName
-                item.lastUpdated     = Date()
-                await viewModel.updateItem(item)
+                item.name = name; item.category = category; item.quantity = quantity
+                item.unit = unit; item.minimumThreshold = threshold; item.costPerUnit = cost
+                item.supplierID = supplierID.isEmpty ? nil : supplierID
+                item.supplierName = supplierName.isEmpty ? nil : supplierName
+                item.lastUpdated = Date()
+                await inventoryVM.updateItem(item)
             }
-            isSaving = false
-            dismiss()
+            isSaving = false; dismiss()
         }
     }
 }
