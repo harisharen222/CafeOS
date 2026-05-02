@@ -6,6 +6,7 @@ class SupplierViewModel: ObservableObject {
     @Published var suppliers: [Supplier] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
+    @Published var showError: Bool = false
 
     private let service = FirestoreService()
 
@@ -21,6 +22,7 @@ class SupplierViewModel: ObservableObject {
                 .sorted { $0.name < $1.name }
         } catch {
             errorMessage = (error as? AppError)?.errorDescription ?? error.localizedDescription
+            showError = true
         }
     }
 
@@ -30,6 +32,7 @@ class SupplierViewModel: ObservableObject {
             await fetchSuppliers()
         } catch {
             errorMessage = (error as? AppError)?.errorDescription ?? error.localizedDescription
+            showError = true
         }
     }
 
@@ -40,6 +43,7 @@ class SupplierViewModel: ObservableObject {
             await fetchSuppliers()
         } catch {
             errorMessage = (error as? AppError)?.errorDescription ?? error.localizedDescription
+            showError = true
         }
     }
 
@@ -50,6 +54,7 @@ class SupplierViewModel: ObservableObject {
             await fetchSuppliers()
         } catch {
             errorMessage = (error as? AppError)?.errorDescription ?? error.localizedDescription
+            showError = true
         }
     }
 }

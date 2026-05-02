@@ -2,7 +2,7 @@ import SwiftUI
 
 struct InventoryDetailView: View {
     let item: InventoryItem
-    @ObservedObject var viewModel: InventoryViewModel
+    @EnvironmentObject var inventoryVM: InventoryViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showEditForm = false
     @State private var showDeleteAlert = false
@@ -12,10 +12,8 @@ struct InventoryDetailView: View {
             if item.isLowStock {
                 Section {
                     HStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                        Text("Stock is running low. Consider reordering soon.")
-                            .font(.subheadline)
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                        Text("Stock is running low. Consider reordering soon.").font(.subheadline)
                     }
                 }
                 .listRowBackground(Color.orange.opacity(0.1))
@@ -38,9 +36,7 @@ struct InventoryDetailView: View {
             }
 
             Section {
-                Button("Delete Item", role: .destructive) {
-                    showDeleteAlert = true
-                }
+                Button("Delete Item", role: .destructive) { showDeleteAlert = true }
             }
         }
         .listStyle(.insetGrouped)
@@ -48,19 +44,15 @@ struct InventoryDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Edit") { showEditForm = true }
-                    .tint(.brown)
+                Button("Edit") { showEditForm = true }.tint(.brown)
             }
         }
         .sheet(isPresented: $showEditForm) {
-            InventoryFormView(viewModel: viewModel, mode: .edit(item))
+            InventoryFormView(mode: .edit(item))
         }
         .alert("Delete Item", isPresented: $showDeleteAlert) {
             Button("Delete", role: .destructive) {
-                Task {
-                    await viewModel.deleteItem(item)
-                    dismiss()
-                }
+                Task { await inventoryVM.deleteItem(item); dismiss() }
             }
             Button("Cancel", role: .cancel) {}
         } message: {

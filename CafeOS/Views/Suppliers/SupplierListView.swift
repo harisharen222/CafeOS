@@ -1,107 +1,73 @@
 import SwiftUI
 
 struct SupplierListView: View {
-    @ObservedObject var viewModel: SupplierViewModel
+    @EnvironmentObject var supplierVM: SupplierViewModel
     @State private var showAddForm = false
     @State private var supplierToDelete: Supplier? = nil
     @State private var showDeleteAlert = false
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if viewModel.isLoading && viewModel.suppliers.isEmpty {
-                    ProgressView("Loading suppliers…")
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.suppliers.isEmpty {
-                    emptyStateView
-                } else {
-                    supplierList
-                }
-            }
-            .navigationTitle("Suppliers")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAddForm = true } label: {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
-            .sheet(isPresented: $showAddForm) {
-                SupplierFormView(viewModel: viewModel, mode: .add)
-            }
-            .alert("Delete Supplier", isPresented: $showDeleteAlert, presenting: supplierToDelete) { supplier in
-                Button("Delete", role: .destructive) {
-                    Task { await viewModel.deleteSupplier(supplier) }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: { supplier in
-                Text("Delete \"\(supplier.name)\"? This cannot be undone.")
-            }
-            .task {
-                await viewModel.fetchSuppliers()
+        VStack(spacing: 0) {
+            ErrorBannerView(
+                message: supplierVM.errorMessage ?? "",
+                onRetry: { Task { await supplierVM.fetchSuppliers() } },
+                isVisible: $supplierVM.showError
+            )
+            content
+        }
+        .navigationTitle("Suppliers")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAddForm = true } label: { Image(systemName: "plus") }
             }
         }
+        .sheet(isPresented: $showAddForm) { SupplierFormView(mode: .add) }
+        .alert("Delete Supplier", isPresented: $showDeleteAlert, presenting: supplierToDelete) { s in
+            Button("Delete", role: .destructive) { Task { await supplierVM.deleteSupplier(s) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { s in Text("Delete \"\(s.name)\"? This cannot be undone.") }
+        .task { await supplierVM.fetchSuppliers() }
     }
 
-    private var supplierList: some View {
-        List {
-            if let error = viewModel.errorMessage {
-                Section {
-                    Text(error).foregroundStyle(.red).font(.caption)
-                }
-            }
-            
-            if viewModel.totalAmountOwed > 0 {
-                Section {
-                    HStack {
-                        Text("Total Owed")
-                            .font(.subheadline)
-                        Spacer()
-                        Text(String(format: "₹%.2f", viewModel.totalAmountOwed))
-                            .bold()
-                            .foregroundStyle(.orange)
+    @ViewBuilder
+    private var content: some View {
+        if supplierVM.isLoading && supplierVM.suppliers.isEmpty {
+            ProgressView("Loading suppliers…").frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if supplierVM.suppliers.isEmpty {
+            EmptyStateView(
+                icon: "person.2",
+                title: "No suppliers yet",
+                subtitle: "Tap + to add your first supplier",
+                actionTitle: "Add Supplier"
+            ) { showAddForm = true }
+        } else {
+            List {
+                if supplierVM.totalAmountOwed > 0 {
+                    Section {
+                        HStack {
+                            Text("Total Owed").font(.subheadline)
+                            Spacer()
+                            Text(String(format: "₹%.2f", supplierVM.totalAmountOwed))
+                                .bold().foregroundStyle(.orange)
+                        }
                     }
                 }
-            }
-
-            ForEach(viewModel.suppliers) { supplier in
-                NavigationLink {
-                    SupplierDetailView(supplier: supplier, viewModel: viewModel)
-                } label: {
-                    SupplierRowView(supplier: supplier)
-                }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        supplierToDelete = supplier
-                        showDeleteAlert = true
+                ForEach(supplierVM.suppliers) { supplier in
+                    NavigationLink {
+                        SupplierDetailView(supplier: supplier)
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        SupplierRowView(supplier: supplier)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            supplierToDelete = supplier; showDeleteAlert = true
+                        } label: { Label("Delete", systemImage: "trash") }
                     }
                 }
             }
+            .listStyle(.insetGrouped)
+            .refreshable { await supplierVM.fetchSuppliers() }
         }
-        .listStyle(.insetGrouped)
-        .refreshable {
-            await viewModel.fetchSuppliers()
-        }
-    }
-
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "person.2")
-                .font(.system(size: 48))
-                .foregroundStyle(.brown.opacity(0.4))
-            Text("No suppliers yet")
-                .font(.title3).bold()
-            Text("Add your first supplier to get started.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Add Supplier") { showAddForm = true }
-                .buttonStyle(.borderedProminent)
-                .tint(.brown)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -111,8 +77,7 @@ private struct SupplierRowView: View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(supplier.name).font(.headline)
-                Text(supplier.contactName)
-                    .font(.caption).foregroundStyle(.secondary)
+                Text(supplier.contactName).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             if supplier.amountOwed > 0 {

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct InventoryListView: View {
-    @ObservedObject var viewModel: InventoryViewModel
+    @EnvironmentObject var inventoryVM: InventoryViewModel
     @State private var searchText = ""
     @State private var selectedCategory = "All"
     @State private var showAddForm = false
@@ -12,41 +12,50 @@ struct InventoryListView: View {
 
     private var filteredItems: [InventoryItem] {
         let bySearch = searchText.isEmpty
-            ? viewModel.items
-            : viewModel.items.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            ? inventoryVM.items
+            : inventoryVM.items.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
         guard selectedCategory != "All" else { return bySearch }
         return bySearch.filter { $0.category == selectedCategory }
     }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            ErrorBannerView(
+                message: inventoryVM.errorMessage ?? "",
+                onRetry: { inventoryVM.startListening() },
+                isVisible: $inventoryVM.showError
+            )
             content
-                .navigationTitle("Inventory")
-                .searchable(text: $searchText, prompt: "Search items")
-                .toolbar { toolbarContent }
-                .sheet(isPresented: $showAddForm) {
-                    InventoryFormView(viewModel: viewModel, mode: .add)
-                }
-                .alert("Delete Item", isPresented: $showDeleteAlert, presenting: itemToDelete) { item in
-                    Button("Delete", role: .destructive) {
-                        Task { await viewModel.deleteItem(item) }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: { item in
-                    Text("Delete \"\(item.name)\"? This cannot be undone.")
-                }
-                .onAppear { viewModel.startListening() }
-                .onDisappear { viewModel.stopListening() }
         }
+        .navigationTitle("Inventory")
+        .searchable(text: $searchText, prompt: "Search items")
+        .toolbar { toolbarContent }
+        .sheet(isPresented: $showAddForm) {
+            InventoryFormView(mode: .add)
+        }
+        .alert("Delete Item", isPresented: $showDeleteAlert, presenting: itemToDelete) { item in
+            Button("Delete", role: .destructive) {
+                Task { await inventoryVM.deleteItem(item) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { item in
+            Text("Delete \"\(item.name)\"? This cannot be undone.")
+        }
+        .onAppear { inventoryVM.startListening() }
     }
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading {
+        if inventoryVM.isLoading && inventoryVM.items.isEmpty {
             ProgressView("Loading inventory…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if viewModel.items.isEmpty {
-            emptyStateView
+        } else if inventoryVM.items.isEmpty {
+            EmptyStateView(
+                icon: "archivebox",
+                title: "No items yet",
+                subtitle: "Tap + to add your first inventory item",
+                actionTitle: "Add Item"
+            ) { showAddForm = true }
         } else {
             inventoryList
         }
@@ -55,72 +64,42 @@ struct InventoryListView: View {
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            Button { showAddForm = true } label: {
-                Image(systemName: "plus")
-            }
+            Button { showAddForm = true } label: { Image(systemName: "plus") }
         }
         ToolbarItem(placement: .topBarLeading) {
             Picker("Category", selection: $selectedCategory) {
                 ForEach(categories, id: \.self) { Text($0).tag($0) }
             }
-            .pickerStyle(.menu)
-            .tint(.brown)
+            .pickerStyle(.menu).tint(.brown)
         }
     }
 
     private var inventoryList: some View {
         List {
-            if let error = viewModel.errorMessage {
-                Section {
-                    Text(error).foregroundStyle(.red).font(.caption)
-                }
-            }
             ForEach(filteredItems) { item in
                 NavigationLink {
-                    InventoryDetailView(item: item, viewModel: viewModel)
+                    InventoryDetailView(item: item)
                 } label: {
                     InventoryRowView(item: item)
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button(role: .destructive) {
-                        itemToDelete = item
-                        showDeleteAlert = true
-                    } label: {
-                        Label("Delete", systemImage: "trash")
-                    }
+                        itemToDelete = item; showDeleteAlert = true
+                    } label: { Label("Delete", systemImage: "trash") }
                 }
             }
         }
         .listStyle(.insetGrouped)
     }
-
-    private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "archivebox")
-                .font(.system(size: 48))
-                .foregroundStyle(.brown.opacity(0.4))
-            Text("No items yet")
-                .font(.title3).bold()
-            Text("Add your first inventory item to get started.")
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("Add Item") { showAddForm = true }
-                .buttonStyle(.borderedProminent)
-                .tint(.brown)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
 }
 
-// MARK: — Row subview
 private struct InventoryRowView: View {
     let item: InventoryItem
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.name).font(.headline)
-                Text("\(item.quantity, specifier: "%.1f") \(item.unit) · \(item.category)")
+                Text("\(String(format: "%.1f", item.quantity)) \(item.unit) · \(item.category)")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
