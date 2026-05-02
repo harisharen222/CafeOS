@@ -1,3 +1,50 @@
 import Foundation
+import Combine
 
-// TODO: implement — AI Reorder Advisor logic (Day 3)
+@MainActor
+final class AIViewModel: ObservableObject {
+    @Published var recommendations: [ReorderAdvice] = []
+    @Published var isLoading: Bool = false
+    @Published var errorMessage: String? = nil
+    @Published var showError: Bool = false
+    @Published var hasLoaded: Bool = false   // prevents auto-refresh on every appear
+
+    private let service = AIService()
+
+    func fetchRecommendations(items: [InventoryItem], suppliers: [Supplier]) async {
+        isLoading = true
+        showError = false
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            recommendations = try await service.getReorderAdvice(items: items, suppliers: suppliers)
+            hasLoaded = true
+        } catch {
+            errorMessage = AppError.aiServiceFailed.errorDescription
+            showError = true
+        }
+    }
+
+    func clear() {
+        recommendations = []
+        hasLoaded = false
+        showError = false
+        errorMessage = nil
+    }
+
+    // Urgency sort: critical first, then high, then medium
+    var sortedRecommendations: [ReorderAdvice] {
+        recommendations.sorted {
+            urgencyRank($0.urgency) < urgencyRank($1.urgency)
+        }
+    }
+
+    private func urgencyRank(_ urgency: String) -> Int {
+        switch urgency {
+        case "critical": return 0
+        case "high":     return 1
+        default:         return 2
+        }
+    }
+}

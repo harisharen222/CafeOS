@@ -123,11 +123,13 @@ struct DashboardView: View {
                 // AI Reorder Advisor card
                 NavigationLink(destination: ReorderAdvisorView()) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Label("Smart Reorder Advisor", systemImage: "sparkles")
-                                .font(.headline).foregroundColor(.white)
+                                .font(.headline)
+                                .foregroundColor(.white)
                             Text("Tap to get AI-powered reorder recommendations →")
-                                .font(.subheadline).foregroundColor(.white.opacity(0.85))
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.85))
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
@@ -135,9 +137,9 @@ struct DashboardView: View {
                     }
                     .padding()
                     .background(Color.brown)
-                    .cornerRadius(14)
-                    .padding(.horizontal)
+                    .cornerRadius(12)
                 }
+                .padding(.horizontal)
             }
             .padding(.vertical)
         }

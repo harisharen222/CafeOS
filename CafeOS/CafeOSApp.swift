@@ -7,6 +7,7 @@ struct CafeOSApp: App {
     @StateObject private var inventoryVM = InventoryViewModel()
     @StateObject private var supplierVM  = SupplierViewModel()
     @StateObject private var orderVM     = OrderViewModel()
+    @StateObject private var aiVM        = AIViewModel()
 
     init() {
         FirebaseApp.configure()
@@ -32,6 +33,7 @@ struct CafeOSApp: App {
                         .environmentObject(inventoryVM)
                         .environmentObject(supplierVM)
                         .environmentObject(orderVM)
+                        .environmentObject(aiVM)
                 } else {
                     NavigationStack {
                         LoginView()
