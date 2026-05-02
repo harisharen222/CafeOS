@@ -1,3 +1,94 @@
 import Foundation
+import FirebaseFirestore
 
-// TODO: implement — Generic Firestore CRUD + snapshot listener (Phase 4)
+class FirestoreService {
+    private let db = Firestore.firestore()
+
+    // MARK: — One-time fetch (Suppliers, Orders)
+    func fetch<T: Codable>(_ collection: String) async throws -> [T] {
+        do {
+            let snapshot = try await db.collection(collection).getDocuments()
+            return snapshot.documents.compactMap { try? $0.data(as: T.self) }
+        } catch {
+            throw AppError.firestoreFetchFailed
+        }
+    }
+
+    // MARK: — Real-time listener (Inventory)
+    func listen<T: Codable>(
+        _ collection: String,
+        onChange: @escaping ([T]) -> Void
+    ) -> ListenerRegistration {
+        db.collection(collection).addSnapshotListener { snapshot, error in
+            guard let documents = snapshot?.documents, error == nil else { return }
+            let items = documents.compactMap { try? $0.data(as: T.self) }
+            DispatchQueue.main.async { onChange(items) }
+        }
+    }
+
+    // MARK: — Add
+    func add<T: Encodable>(_ item: T, to collection: String) async throws {
+        do {
+            try db.collection(collection).addDocument(from: item)
+        } catch {
+            throw AppError.firestoreWriteFailed
+        }
+    }
+
+    // MARK: — Update
+    func update<T: Encodable>(_ item: T, id: String, in collection: String) async throws {
+        do {
+            try db.collection(collection).document(id).setData(from: item)
+        } catch {
+            throw AppError.firestoreWriteFailed
+        }
+    }
+
+    // MARK: — Delete
+    func delete(id: String, from collection: String) async throws {
+        do {
+            try await db.collection(collection).document(id).delete()
+        } catch {
+            throw AppError.firestoreDeleteFailed
+        }
+    }
+
+    // MARK: — Transaction: Mark Order Received
+    // Idempotent — reads status before writing. Double-tap safe.
+    func markOrderReceived(
+        orderID: String,
+        itemID: String,
+        quantity: Double
+    ) async throws {
+        let orderRef = db.collection(Constants.Firestore.orders).document(orderID)
+        let itemRef  = db.collection(Constants.Firestore.inventory).document(itemID)
+
+        do {
+            try await db.runTransaction { transaction, errorPointer in
+                let orderDoc: DocumentSnapshot
+                do {
+                    orderDoc = try transaction.getDocument(orderRef)
+                } catch let e as NSError {
+                    errorPointer?.pointee = e
+                    return nil
+                }
+                // Only proceed if still pending — prevents double-increment
+                guard orderDoc.data()?["status"] as? String == OrderStatus.pending.rawValue
+                else { return nil }
+
+                transaction.updateData(
+                    ["status": OrderStatus.received.rawValue,
+                     "receivedDate": Timestamp()],
+                    forDocument: orderRef
+                )
+                transaction.updateData(
+                    ["quantity": FieldValue.increment(quantity)],
+                    forDocument: itemRef
+                )
+                return nil
+            }
+        } catch {
+            throw AppError.transactionFailed
+        }
+    }
+}
