@@ -1,12 +1,15 @@
 import SwiftUI
 
 struct MainTabView: View {
+    @StateObject private var inventoryVM = InventoryViewModel()
+    @StateObject private var supplierVM  = SupplierViewModel()
+
     var body: some View {
         TabView {
-            Text("Inventory — Coming Phase 7")
+            InventoryListView(viewModel: inventoryVM)
                 .tabItem { Label("Inventory", systemImage: "archivebox.fill") }
 
-            Text("Suppliers — Coming Phase 8")
+            SupplierListView(viewModel: supplierVM)
                 .tabItem { Label("Suppliers", systemImage: "person.2.fill") }
 
             Text("Orders — Coming Day 2")
