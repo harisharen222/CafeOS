@@ -22,6 +22,11 @@ struct MainTabView: View {
                 OrderListView()
             }
             .tabItem { Label("Orders", systemImage: "cart.fill") }
+
+            NavigationStack {
+                URLExtractorView()
+            }
+            .tabItem { Label("URL", systemImage: "link.circle.fill") }
         }
         .accentColor(.brown)
         .task {
