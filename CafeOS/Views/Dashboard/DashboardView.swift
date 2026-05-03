@@ -88,20 +88,27 @@ struct DashboardView: View {
                     activityRow
                         .padding(.horizontal, 16)
 
-                    // ── AI Insights inline card (no external header) ──
-                    aiInsightsCard
-                        .padding(.horizontal, 16)
-                        .padding(.top, 24)
-
-                    // ── Spending Insights inline card ──
-                    spendingInsightsCard
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-
                     // ── Needs Attention ────────────────────────
                     if !inventoryVM.lowStockItems.isEmpty {
-                        sectionHeader("exclamationmark.triangle.fill", "NEEDS ATTENTION", color: .red)
-                            .padding(.top, 24)
+                        HStack {
+                            sectionHeader("exclamationmark.triangle.fill", "NEEDS ATTENTION", color: .red)
+                            Spacer()
+                            NavigationLink(destination: AutoDraftOrdersView()) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                    Text("Auto-Draft")
+                                }
+                                .font(.caption.bold())
+                                .foregroundColor(.dashCrimson)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(Color.dashCrimson.opacity(0.15))
+                                .cornerRadius(8)
+                            }
+                            .padding(.trailing, 16)
+                            .padding(.bottom, 8)
+                        }
+                        .padding(.top, 24)
 
                         needsAttentionList
                             .padding(.horizontal, 16)
@@ -292,108 +299,6 @@ struct DashboardView: View {
                 label: "Amount Owed"
             )
         }
-    }
-
-    // MARK: — AI Insights Inline Card
-
-    @ViewBuilder
-    private var aiInsightsCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-
-            // Header row: internal "INSIGHTS" label + Refresh button
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.caption.bold())
-                        .foregroundColor(.dashCrimson)
-                    Text("INSIGHTS")
-                        .font(.caption.bold())
-                        .foregroundColor(.dashCrimson)
-                        .kerning(2)
-                }
-                Spacer()
-                Button {
-                    Task {
-                        await aiVM.fetchRecommendations(
-                            items: inventoryVM.items,
-                            suppliers: supplierVM.suppliers
-                        )
-                    }
-                } label: {
-                    Text("Refresh")
-                        .font(.caption.bold())
-                        .foregroundColor(.dashCrimson)
-                }
-                .disabled(aiVM.isLoading)
-            }
-
-            // Content states
-            if aiVM.isLoading {
-                VStack(spacing: 8) {
-                    ProgressView().tint(.dashCrimson)
-                    Text("Analysing inventory…")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 80)
-
-            } else if aiVM.hasLoaded && !aiVM.sortedRecommendations.isEmpty {
-                // Top 2 recommendations inline
-                VStack(spacing: 8) {
-                    ForEach(aiVM.sortedRecommendations.prefix(2)) { advice in
-                        InlineAdviceRow(advice: advice)
-                    }
-                }
-
-                // View all link
-                NavigationLink(destination: ReorderAdvisorView()) {
-                    HStack(spacing: 4) {
-                        Text("View all \(aiVM.recommendations.count) recommendations")
-                            .font(.caption)
-                            .foregroundColor(.dashCrimson)
-                        Image(systemName: "arrow.right")
-                            .font(.caption2)
-                            .foregroundColor(.dashCrimson)
-                    }
-                }
-                .padding(.top, 4)
-
-            } else if aiVM.hasLoaded && aiVM.recommendations.isEmpty {
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                    Text("All items well stocked")
-                        .font(.subheadline)
-                        .foregroundColor(.white)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            } else if lowStockCount == 0 {
-                // No low-stock items, not yet run
-                Text("No low-stock items to analyse")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .frame(height: 60)
-
-            } else {
-                // Low stock exists but AI not yet run
-                HStack(spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                        .font(.caption)
-                    Text("\(lowStockCount) items need attention — tap Refresh")
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .frame(height: 60)
-            }
-        }
-        .padding(16)
-        .background(Color.dashCard)
-        .cornerRadius(16)
     }
 
     // MARK: — Spending Insights Inline Card
@@ -587,48 +492,6 @@ private struct ActivityCard: View {
         .frame(height: 100)
         .background(Color.dashCard)
         .cornerRadius(16)
-    }
-}
-
-private struct InlineAdviceRow: View {
-    let advice: ReorderAdvice
-
-    private var urgencyColor: Color {
-        switch advice.urgency {
-        case "critical": return Color.dashCrimson
-        case "high":     return .orange
-        default:         return .yellow
-        }
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            // Left urgency bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(urgencyColor)
-                .frame(width: 3)
-                .frame(minHeight: 36)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(advice.itemName)
-                    .font(.subheadline.bold())
-                    .foregroundColor(.white)
-                Text(advice.reason)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-
-            Spacer()
-
-            Text(advice.urgency.capitalized)
-                .font(.caption2.bold())
-                .foregroundColor(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(urgencyColor)
-                .cornerRadius(6)
-        }
     }
 }
 

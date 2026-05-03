@@ -81,11 +81,11 @@ final class AIService {
             let supplierName = supplier?.name ?? item.supplierName ?? "Unknown"
             let deliveryDays = supplier?.deliveryDays ?? 3
             return """
-            - name: \(item.name), category: \(item.category), \
+            - itemID: \(item.id ?? ""), name: \(item.name), category: \(item.category), \
             currentQty: \(item.quantity) \(item.unit), \
             minimumThreshold: \(item.minimumThreshold) \(item.unit), \
             costPerUnit: \(item.costPerUnit), \
-            supplier: \(supplierName), deliveryDays: \(deliveryDays)
+            supplierID: \(supplier?.id ?? ""), supplier: \(supplierName), deliveryDays: \(deliveryDays)
             """
         }.joined(separator: "\n")
 
@@ -97,12 +97,15 @@ final class AIService {
         - Return ONLY a valid JSON object. No markdown. No explanation. No code fences.
         - Root key must be "recommendations" containing an array.
         - Each object in the array must have EXACTLY these keys with these types:
+          * itemID: string
           * itemName: string
           * urgency: string — ONLY one of: "critical", "high", "medium"
           * reason: string — max 20 words explaining why
           * recommendedQty: number — enough for approximately 2 weeks
+          * costPerUnit: number
           * unit: string — same unit as the input
           * orderToday: boolean — true if urgency is critical or high
+          * supplierID: string
           * supplierName: string
           * deliveryDays: number
 
