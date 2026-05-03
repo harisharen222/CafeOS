@@ -49,6 +49,7 @@ struct OrderFormView: View {
                                 }
                             }
                             .tint(Color.dashCrimson)
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                             .onChange(of: selectedItemID) { _, newID in
@@ -69,6 +70,7 @@ struct OrderFormView: View {
                                 ForEach(supplierVM.suppliers) { s in Text(s.name).tag(s.id ?? "") }
                             }
                             .tint(Color.dashCrimson)
+                            .frame(maxWidth: .infinity)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 12)
                             if selectedSupplierID.isEmpty {
