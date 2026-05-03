@@ -15,6 +15,12 @@ struct DashboardView: View {
         else { return "Good evening " }
     }
 
+    private var userInitials: String {
+        let email = appState.currentUserEmail ?? "U"
+        let name = email.components(separatedBy: "@").first ?? "U"
+        return String(name.prefix(2)).uppercased()
+    }
+
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
     var body: some View {
@@ -172,10 +178,15 @@ struct DashboardView: View {
         .navigationTitle("Dashboard")
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    try? appState.signOut()
-                } label: {
-                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                NavigationLink(destination: ProfileView()) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.brown.opacity(0.2))
+                            .frame(width: 32, height: 32)
+                        Text(userInitials)
+                            .font(.caption.bold())
+                            .foregroundColor(.brown)
+                    }
                 }
             }
         }
