@@ -1,8 +1,6 @@
 import Foundation
 
 final class AIService {
-    private let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
-
     func getReorderAdvice(items: [InventoryItem],
                           suppliers: [Supplier]) async throws -> [ReorderAdvice] {
         // Only send items that are at or below their minimum threshold
@@ -13,15 +11,22 @@ final class AIService {
         let prompt = buildPrompt(inventoryJSON: inventoryJSON)
 
         let requestBody: [String: Any] = [
-            "model": "gpt-4o-mini",
-            "messages": [["role": "user", "content": prompt]],
-            "max_tokens": 800,
-            "response_format": ["type": "json_object"]   // enforces JSON object root
+            "contents": [
+                [
+                    "parts": [
+                        ["text": prompt]
+                    ]
+                ]
+            ],
+            "generationConfig": [
+                "responseMimeType": "application/json"
+            ]
         ]
 
+        // Using Gemini API endpoint
+        let endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\(Secrets.openAIKey)")!
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(Secrets.openAIKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
@@ -38,9 +43,8 @@ final class AIService {
             throw AppError.aiServiceFailed
         }
 
-        // GPT response structure: { choices: [{ message: { content: "{ recommendations: [...] }" } }] }
-        let gptResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-        guard let content = gptResponse.choices.first?.message.content else {
+        let gptResponse = try JSONDecoder().decode(GeminiResponse.self, from: data)
+        guard let content = gptResponse.candidates.first?.content.parts.first?.text else {
             throw AppError.aiServiceFailed
         }
 
@@ -48,7 +52,7 @@ final class AIService {
             throw AppError.aiServiceFailed
         }
 
-        // Decode the root object — NOT a bare array
+        // Decode the root object
         let reorderResponse = try JSONDecoder().decode(ReorderResponse.self, from: contentData)
         return reorderResponse.recommendations
     }
@@ -96,14 +100,17 @@ final class AIService {
     }
 }
 
-// MARK: — OpenAI response shape
+// MARK: — Gemini response shape
 
-private struct OpenAIResponse: Codable {
-    struct Choice: Codable {
-        struct Message: Codable {
-            let content: String
+private struct GeminiResponse: Codable {
+    struct Candidate: Codable {
+        struct Content: Codable {
+            struct Part: Codable {
+                let text: String
+            }
+            let parts: [Part]
         }
-        let message: Message
+        let content: Content
     }
-    let choices: [Choice]
+    let candidates: [Candidate]
 }
