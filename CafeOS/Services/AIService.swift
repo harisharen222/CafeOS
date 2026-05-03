@@ -2,8 +2,8 @@ import Foundation
 
 final class AIService {
 
-    // Gemini Flash 2.0 endpoint — API key passed as query parameter
-    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    // Gemini Flash 2.5 endpoint — API key passed as query parameter
+    private let baseURL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     func getReorderAdvice(items: [InventoryItem],
                           suppliers: [Supplier]) async throws -> [ReorderAdvice] {
@@ -34,9 +34,13 @@ final class AIService {
     // MARK: — Generic Gemini caller (JSON response)
 
     private func callGeminiJSON<T: Decodable>(prompt: String, decoding type: T.Type) async throws -> T {
-        guard var components = URLComponents(string: baseURL) else { throw AppError.aiServiceFailed }
+        guard var components = URLComponents(string: baseURL) else {
+            throw NSError(domain: "AIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid base URL."])
+        }
         components.queryItems = [URLQueryItem(name: "key", value: Secrets.geminiAPIKey)]
-        guard let url = components.url else { throw AppError.aiServiceFailed }
+        guard let url = components.url else {
+            throw NSError(domain: "AIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to construct URL with API key."])
+        }
 
         let requestBody: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
@@ -55,8 +59,9 @@ final class AIService {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let body = String(data: data, encoding: .utf8) ?? "no body"
-            print("[AIService] Gemini error: \(body)")
-            throw AppError.aiServiceFailed
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            print("[AIService] Gemini error (\(code)): \(body)")
+            throw NSError(domain: "AIService", code: code, userInfo: [NSLocalizedDescriptionKey: "API Error (\(code)): \(body)"])
         }
 
         let geminiResponse = try JSONDecoder().decode(GeminiResponse.self, from: data)
