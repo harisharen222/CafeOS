@@ -104,17 +104,45 @@ struct URLExtractorView: View {
                     if viewModel.hasResult {
                         VStack(alignment: .leading, spacing: 12) {
 
-                            // Content header row
-                            HStack {
+                            // Content header row — Copy + PDF always visible
+                            HStack(alignment: .center, spacing: 8) {
                                 Text("Extracted Content")
                                     .font(.subheadline.bold())
                                     .foregroundColor(.white)
+
                                 Spacer()
+
                                 Button("Copy") {
                                     UIPasteboard.general.string = viewModel.extractedContent
                                 }
                                 .font(.subheadline)
                                 .foregroundColor(Color.dashCrimson)
+                                .disabled(viewModel.extractedContent
+                                    .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                                Divider().frame(height: 16)
+
+                                Button {
+                                    viewModel.generatePDF()
+                                } label: {
+                                    if viewModel.isGeneratingPDF {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                            .tint(Color.dashCrimson)
+                                    } else {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: "arrow.down.doc.fill")
+                                            Text("PDF")
+                                        }
+                                        .font(.subheadline)
+                                        .foregroundColor(Color.dashCrimson)
+                                    }
+                                }
+                                .disabled(
+                                    viewModel.extractedContent
+                                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    || viewModel.isGeneratingPDF
+                                )
                             }
                             .padding(.horizontal)
 
@@ -129,33 +157,7 @@ struct URLExtractorView: View {
                                 .textSelection(.enabled)
                                 .padding(.horizontal)
 
-                            // Export as PDF button
-                            Button {
-                                viewModel.generatePDF()
-                            } label: {
-                                if viewModel.isGeneratingPDF {
-                                    HStack(spacing: 8) {
-                                        ProgressView().tint(.white)
-                                        Text("Generating PDF…")
-                                            .fontWeight(.semibold)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                } else {
-                                    Label("Export as PDF", systemImage: "arrow.down.doc.fill")
-                                        .fontWeight(.semibold)
-                                        .frame(maxWidth: .infinity)
-                                }
-                            }
-                            .padding()
-                            .background(viewModel.isGeneratingPDF
-                                        ? Color.dashCard
-                                        : Color.dashMaroon)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                            .disabled(viewModel.extractedContent
-                                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                      || viewModel.isGeneratingPDF)
-                            .padding(.horizontal)
+
                         }
                     }
 
