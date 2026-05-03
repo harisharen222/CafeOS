@@ -11,13 +11,12 @@ struct ReorderAdvice: Identifiable, Codable {
     let supplierName: String
     let deliveryDays: Int
 
-    // Exclude `id` from Codable — it is not in the GPT response
     enum CodingKeys: String, CodingKey {
-        case itemName, urgency, reason, recommendedQty, unit, orderToday, supplierName, deliveryDays
+        case itemName, urgency, reason, recommendedQty
+        case unit, orderToday, supplierName, deliveryDays
     }
 }
 
-// Wrapper that matches the root JSON object GPT returns
 struct ReorderResponse: Codable {
     let recommendations: [ReorderAdvice]
 }
