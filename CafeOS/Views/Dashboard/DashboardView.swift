@@ -200,7 +200,7 @@ struct DashboardView: View {
     private var inventoryHealthRow: some View {
         HStack(spacing: 10) {
             StatCard(icon: "square.stack.3d.up.fill", value: "\(totalItems)",
-                     label: "Total SKUs", iconColor: .blue)
+                     label: "Total Items", iconColor: .blue)
             StatCard(icon: "exclamationmark.triangle.fill", value: "\(lowStockCount)",
                      label: "Low Stock", iconColor: .orange)
             StatCard(icon: "xmark.circle.fill", value: "\(outOfStockCount)",
