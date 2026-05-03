@@ -12,95 +12,170 @@ struct InventoryFormView: View {
 
     @State private var name = ""
     @State private var category = Constants.Categories.all[0]
-    @State private var quantityText = ""
+    @State private var quantity: Double = 0
     @State private var unit = Constants.Units.all[0]
-    @State private var thresholdText = ""
-    @State private var costText = ""
+    @State private var threshold: Double = 0
+    @State private var cost: Double = 0
     @State private var supplierID = ""
     @State private var supplierName = ""
     @State private var isSaving = false
 
+    // Inline edit states for tappable number
+    @State private var editingQuantity = false
+    @State private var editingThreshold = false
+    @State private var quantityEditText = ""
+    @State private var thresholdEditText = ""
+
     @FocusState private var focusedField: FormField?
-    enum FormField { case name, quantity, threshold, cost }
+    enum FormField { case name, cost, quantityEdit, thresholdEdit }
 
     private var isEditing: Bool { if case .edit = mode { return true }; return false }
 
-    private var quantity: Double { Double(quantityText) ?? -1 }
-    private var threshold: Double { Double(thresholdText) ?? -1 }
-    private var cost: Double { Double(costText) ?? -1 }
-
     private var isFormValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty &&
-        quantity >= 0 && threshold >= 0 && cost >= 0
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && quantity >= 0 && threshold >= 0 && cost >= 0
     }
+
+    private let quantityPresets: [Double] = [1, 5, 10, 25, 50]
+    private let thresholdPresets: [Double] = [1, 2, 5, 10, 20]
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Item Details") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Item name (required)", text: $name)
-                            .focused($focusedField, equals: .name)
-                        if name.trimmingCharacters(in: .whitespaces).isEmpty && focusedField != .name {
-                            Text("Name cannot be empty.").font(.caption).foregroundStyle(.red)
-                        }
-                    }
-                    Picker("Category", selection: $category) {
-                        ForEach(Constants.Categories.all, id: \.self) { Text($0).tag($0) }
-                    }
-                }
+            ZStack {
+                Color.dashBackground.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
 
-                Section("Stock") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Current quantity", text: $quantityText)
-                            .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .quantity)
-                        if quantity < 0 && focusedField != .quantity {
-                            Text("Quantity must be 0 or greater.").font(.caption).foregroundStyle(.red)
+                        // ── Item Details ───────────────────────────
+                        formSection("ITEM DETAILS") {
+                            darkField("Item name (required)", text: $name, field: .name)
+                            Divider().background(Color.white.opacity(0.07))
+                            HStack {
+                                Text("Category")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Picker("", selection: $category) {
+                                    ForEach(Constants.Categories.all, id: \.self) { Text($0).tag($0) }
+                                }
+                                .tint(Color.dashCrimson)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
-                        if quantity >= 0 && threshold >= 0 && quantity < threshold {
-                            Text("⚠️ Quantity is below the reorder threshold.")
-                                .font(.caption).foregroundStyle(.orange)
-                        }
-                    }
-                    Picker("Unit", selection: $unit) {
-                        ForEach(Constants.Units.all, id: \.self) { Text($0).tag($0) }
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Minimum threshold", text: $thresholdText)
-                            .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .threshold)
-                        if threshold < 0 && focusedField != .threshold {
-                            Text("Threshold cannot be negative.").font(.caption).foregroundStyle(.red)
-                        }
-                    }
-                }
 
-                Section("Pricing") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Cost per unit", text: $costText)
-                            .keyboardType(.decimalPad)
-                            .focused($focusedField, equals: .cost)
-                        if cost < 0 && focusedField != .cost {
-                            Text("Cost cannot be negative.").font(.caption).foregroundStyle(.red)
+                        // ── Quantity Stepper ───────────────────────
+                        formSection("QUANTITY") {
+                            stepperField(
+                                label: "Current Stock",
+                                value: $quantity,
+                                presets: quantityPresets,
+                                editing: $editingQuantity,
+                                editText: $quantityEditText,
+                                field: .quantityEdit
+                            )
+                            Divider().background(Color.white.opacity(0.07))
+                            HStack {
+                                Text("Unit")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Picker("", selection: $unit) {
+                                    ForEach(Constants.Units.all, id: \.self) { Text($0).tag($0) }
+                                }
+                                .tint(Color.dashCrimson)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
                         }
-                    }
-                }
 
-                Section("Supplier (Optional)") {
-                    TextField("Supplier name", text: $supplierName)
-                    TextField("Supplier ID", text: $supplierID)
+                        // ── Minimum Threshold ──────────────────────
+                        formSection("MINIMUM THRESHOLD") {
+                            stepperField(
+                                label: "Reorder Point",
+                                value: $threshold,
+                                presets: thresholdPresets,
+                                editing: $editingThreshold,
+                                editText: $thresholdEditText,
+                                field: .thresholdEdit
+                            )
+                            if quantity >= 0 && threshold > 0 && quantity < threshold {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .foregroundColor(.orange)
+                                        .font(.caption)
+                                    Text("Quantity is below the reorder threshold")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 12)
+                            }
+                        }
+
+                        // ── Pricing ────────────────────────────────
+                        formSection("PRICING") {
+                            HStack {
+                                Text("Cost per unit (₹)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                TextField("0.00", value: $cost, format: .number)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .foregroundColor(.white)
+                                    .focused($focusedField, equals: .cost)
+                                    .frame(width: 100)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+
+                        // ── Supplier (Optional) ────────────────────
+                        formSection("SUPPLIER (OPTIONAL)") {
+                            HStack {
+                                Text("Supplier Name")
+                                    .font(.subheadline).foregroundColor(.secondary)
+                                Spacer()
+                                TextField("—", text: $supplierName)
+                                    .multilineTextAlignment(.trailing)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: 160)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            Divider().background(Color.white.opacity(0.07))
+                            HStack {
+                                Text("Supplier ID")
+                                    .font(.subheadline).foregroundColor(.secondary)
+                                Spacer()
+                                TextField("—", text: $supplierID)
+                                    .multilineTextAlignment(.trailing)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: 160)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                        }
+
+                        Spacer(minLength: 32)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
                 }
             }
             .navigationTitle(isEditing ? "Edit Item" : "Add Item")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }.foregroundColor(.secondary)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if isSaving { ProgressView() }
+                    if isSaving { ProgressView().tint(Color.dashCrimson) }
                     else {
                         Button("Save") { save() }
-                            .disabled(!isFormValid).tint(.brown)
+                            .foregroundColor(isFormValid ? Color.dashCrimson : .secondary)
+                            .disabled(!isFormValid)
                     }
                 }
             }
@@ -108,13 +183,139 @@ struct InventoryFormView: View {
         }
     }
 
+    // MARK: — Helpers
+
+    @ViewBuilder
+    private func formSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundColor(.secondary)
+                .kerning(1.5)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 6)
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Color.dashCard)
+            .cornerRadius(12)
+        }
+    }
+
+    @ViewBuilder
+    private func darkField(_ placeholder: String, text: Binding<String>, field: FormField) -> some View {
+        TextField(placeholder, text: text)
+            .focused($focusedField, equals: field)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func stepperField(
+        label: String,
+        value: Binding<Double>,
+        presets: [Double],
+        editing: Binding<Bool>,
+        editText: Binding<String>,
+        field: FormField
+    ) -> some View {
+        VStack(spacing: 12) {
+            // Preset pills
+            HStack(spacing: 8) {
+                ForEach(presets, id: \.self) { preset in
+                    Button {
+                        value.wrappedValue = preset
+                        editing.wrappedValue = false
+                    } label: {
+                        Text(preset.truncatingRemainder(dividingBy: 1) == 0
+                             ? String(Int(preset))
+                             : String(preset))
+                            .font(.subheadline.bold())
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(value.wrappedValue == preset ? Color.dashCrimson : Color.white.opacity(0.08))
+                            .cornerRadius(10)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+
+            // − number + row
+            HStack(spacing: 20) {
+                Button {
+                    if value.wrappedValue > 0 {
+                        value.wrappedValue = max(0, value.wrappedValue - 1)
+                    }
+                    editing.wrappedValue = false
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.title2.bold())
+                        .foregroundColor(value.wrappedValue > 0 ? Color.dashCrimson : .secondary)
+                }
+                .disabled(value.wrappedValue <= 0)
+                .frame(width: 44, height: 44)
+
+                Spacer()
+
+                if editing.wrappedValue {
+                    TextField("0", text: editText)
+                        .focused($focusedField, equals: field)
+                        .keyboardType(.decimalPad)
+                        .font(.system(size: 40, weight: .bold))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.white)
+                        .frame(width: 120)
+                        .onSubmit {
+                            if let v = Double(editText.wrappedValue), v >= 0 {
+                                value.wrappedValue = v
+                            }
+                            editing.wrappedValue = false
+                        }
+                } else {
+                    Button {
+                        editText.wrappedValue = value.wrappedValue.truncatingRemainder(dividingBy: 1) == 0
+                            ? String(Int(value.wrappedValue))
+                            : String(value.wrappedValue)
+                        editing.wrappedValue = true
+                        focusedField = field
+                    } label: {
+                        Text(value.wrappedValue.truncatingRemainder(dividingBy: 1) == 0
+                             ? String(Int(value.wrappedValue))
+                             : String(format: "%.1f", value.wrappedValue))
+                            .font(.system(size: 40, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    value.wrappedValue += 1
+                    editing.wrappedValue = false
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.title2.bold())
+                        .foregroundColor(Color.dashCrimson)
+                }
+                .frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.vertical, 12)
+    }
+
     private func populateIfEditing() {
         guard case .edit(let item) = mode else { return }
-        name = item.name; category = item.category
-        quantityText = String(item.quantity); unit = item.unit
-        thresholdText = String(item.minimumThreshold)
-        costText = String(item.costPerUnit)
-        supplierID = item.supplierID ?? ""; supplierName = item.supplierName ?? ""
+        name = item.name
+        category = item.category
+        quantity = item.quantity
+        unit = item.unit
+        threshold = item.minimumThreshold
+        cost = item.costPerUnit
+        supplierID = item.supplierID ?? ""
+        supplierName = item.supplierName ?? ""
     }
 
     private func save() {

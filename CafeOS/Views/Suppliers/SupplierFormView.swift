@@ -19,7 +19,7 @@ struct SupplierFormView: View {
     @State private var isSaving = false
 
     @FocusState private var focusedField: FormField?
-    enum FormField { case name, phone, email }
+    enum FormField { case name, contactName, phone, email, amountOwed }
 
     private var isEditing: Bool { if case .edit = mode { return true }; return false }
 
@@ -32,54 +32,169 @@ struct SupplierFormView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Business Details") {
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Business Name (required)", text: $name)
-                            .focused($focusedField, equals: .name)
-                        if name.trimmingCharacters(in: .whitespaces).isEmpty && focusedField != .name {
-                            Text("Name cannot be empty.").font(.caption).foregroundStyle(.red)
+            ZStack {
+                Color.dashBackground.ignoresSafeArea()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 16) {
+
+                        // ── Business Details ───────────────────────
+                        formSection("BUSINESS DETAILS") {
+                            formField("Business Name (required)", text: $name, field: .name)
+                            if name.trimmingCharacters(in: .whitespaces).isEmpty && focusedField != .name {
+                                validationNote("Name cannot be empty.")
+                            }
                         }
-                    }
-                }
-                Section("Contact Person") {
-                    TextField("Contact Name (required)", text: $contactName)
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Phone (required)", text: $phone)
-                            .keyboardType(.phonePad)
-                            .focused($focusedField, equals: .phone)
-                        if phone.filter(\.isNumber).count < 7 && focusedField != .phone && !phone.isEmpty {
-                            Text("Enter a valid phone number.").font(.caption).foregroundStyle(.red)
+
+                        // ── Contact Person ─────────────────────────
+                        formSection("CONTACT PERSON") {
+                            formField("Contact Name (required)", text: $contactName, field: .contactName)
+                            Divider().background(Color.white.opacity(0.07))
+                            formField("Phone (required)", text: $phone, field: .phone,
+                                      keyboard: .phonePad)
+                            if !phone.isEmpty && phone.filter(\.isNumber).count < 7 && focusedField != .phone {
+                                validationNote("Enter a valid phone number.")
+                            }
+                            Divider().background(Color.white.opacity(0.07))
+                            formField("Email (optional)", text: $email, field: .email,
+                                      keyboard: .emailAddress)
+                            if !email.isEmpty && (!email.contains("@") || !email.contains(".")) && focusedField != .email {
+                                validationNote("Enter a valid email address.")
+                            }
                         }
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        TextField("Email (optional)", text: $email)
-                            .keyboardType(.emailAddress).autocapitalization(.none)
-                            .focused($focusedField, equals: .email)
-                        if !email.isEmpty && (!email.contains("@") || !email.contains(".")) && focusedField != .email {
-                            Text("Enter a valid email address.").font(.caption).foregroundStyle(.red)
+
+                        // ── Financial & Logistics ──────────────────
+                        formSection("FINANCIAL & LOGISTICS") {
+                            // Amount Owed
+                            HStack {
+                                Text("Amount Owed (₹)")
+                                    .font(.subheadline).foregroundColor(.secondary)
+                                Spacer()
+                                TextField("0", text: $amountOwedText)
+                                    .keyboardType(.decimalPad)
+                                    .focused($focusedField, equals: .amountOwed)
+                                    .multilineTextAlignment(.trailing)
+                                    .foregroundColor(.white)
+                                    .frame(width: 100)
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+
+                            Divider().background(Color.white.opacity(0.07))
+
+                            // Delivery Days stepper
+                            VStack(spacing: 8) {
+                                HStack {
+                                    Text("Delivery Days")
+                                        .font(.subheadline).foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("\(deliveryDays) day\(deliveryDays == 1 ? "" : "s")")
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(.white)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.top, 12)
+
+                                HStack(spacing: 20) {
+                                    Button {
+                                        if deliveryDays > 1 { deliveryDays -= 1 }
+                                    } label: {
+                                        Image(systemName: "minus")
+                                            .font(.title2.bold())
+                                            .foregroundColor(deliveryDays > 1 ? Color.dashCrimson : .secondary)
+                                    }
+                                    .disabled(deliveryDays <= 1)
+                                    .frame(width: 44, height: 44)
+
+                                    Spacer()
+
+                                    Text("\(deliveryDays)")
+                                        .font(.system(size: 40, weight: .bold))
+                                        .foregroundColor(.white)
+
+                                    Spacer()
+
+                                    Button {
+                                        if deliveryDays < 30 { deliveryDays += 1 }
+                                    } label: {
+                                        Image(systemName: "plus")
+                                            .font(.title2.bold())
+                                            .foregroundColor(deliveryDays < 30 ? Color.dashCrimson : .secondary)
+                                    }
+                                    .disabled(deliveryDays >= 30)
+                                    .frame(width: 44, height: 44)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 12)
+                            }
                         }
+
+                        Spacer(minLength: 32)
                     }
-                }
-                Section("Financial & Logistics") {
-                    TextField("Amount Owed (₹)", text: $amountOwedText).keyboardType(.decimalPad)
-                    Stepper("Delivery Days: \(deliveryDays)", value: $deliveryDays, in: 1...30)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
                 }
             }
             .navigationTitle(isEditing ? "Edit Supplier" : "Add Supplier")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }.foregroundColor(.secondary)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if isSaving { ProgressView() }
+                    if isSaving { ProgressView().tint(Color.dashCrimson) }
                     else {
                         Button("Save") { save() }
-                            .disabled(!isFormValid).tint(.brown)
+                            .foregroundColor(isFormValid ? Color.dashCrimson : .secondary)
+                            .disabled(!isFormValid)
                     }
                 }
             }
             .onAppear { populateIfEditing() }
         }
+    }
+
+    // MARK: — Helpers
+
+    @ViewBuilder
+    private func formSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.caption.bold())
+                .foregroundColor(.secondary)
+                .kerning(1.5)
+                .padding(.horizontal, 4)
+                .padding(.bottom, 6)
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Color.dashCard)
+            .cornerRadius(12)
+        }
+    }
+
+    @ViewBuilder
+    private func formField(
+        _ placeholder: String,
+        text: Binding<String>,
+        field: FormField,
+        keyboard: UIKeyboardType = .default
+    ) -> some View {
+        TextField(placeholder, text: text)
+            .focused($focusedField, equals: field)
+            .keyboardType(keyboard)
+            .autocapitalization(keyboard == .emailAddress ? .none : .words)
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+    }
+
+    private func validationNote(_ message: String) -> some View {
+        Text(message)
+            .font(.caption)
+            .foregroundColor(.red)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 6)
     }
 
     private func populateIfEditing() {
