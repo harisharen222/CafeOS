@@ -26,9 +26,32 @@ final class AIViewModel: ObservableObject {
         }
     }
 
+    // MARK: — Spending Insights
+
+    @Published var spendingInsight: SpendingInsight? = nil
+    @Published var isLoadingInsights: Bool = false
+    @Published var hasLoadedInsights: Bool = false
+
+    func fetchSpendingInsights(orders: [Order], suppliers: [Supplier]) async {
+        isLoadingInsights = true
+        showError = false
+        errorMessage = nil
+        defer { isLoadingInsights = false }
+
+        do {
+            spendingInsight = try await service.getSpendingInsights(orders: orders, suppliers: suppliers)
+            hasLoadedInsights = true
+        } catch {
+            errorMessage = AppError.aiServiceFailed.errorDescription
+            showError = true
+        }
+    }
+
     func clear() {
         recommendations = []
         hasLoaded = false
+        spendingInsight = nil
+        hasLoadedInsights = false
         showError = false
         errorMessage = nil
     }

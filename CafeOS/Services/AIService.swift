@@ -11,31 +11,38 @@ final class AIService {
         let lowItems = items.filter { $0.isLowStock }
         guard !lowItems.isEmpty else { return [] }
 
-        let prompt = buildPrompt(lowItems: lowItems, suppliers: suppliers)
+        let prompt = buildReorderPrompt(lowItems: lowItems, suppliers: suppliers)
+        return try await callGeminiJSON(prompt: prompt, decoding: ReorderResponse.self).recommendations
+    }
 
-        // Build URL with API key as query param (Gemini's auth method)
-        guard var components = URLComponents(string: baseURL) else {
-            throw AppError.aiServiceFailed
-        }
-        components.queryItems = [
-            URLQueryItem(name: "key", value: Secrets.geminiAPIKey)
-        ]
-        guard let url = components.url else {
-            throw AppError.aiServiceFailed
+    // MARK: — Spending Insights
+
+    func getSpendingInsights(orders: [Order], suppliers: [Supplier]) async throws -> SpendingInsight {
+        let delivered = orders.filter { $0.status == .received }
+        guard !delivered.isEmpty else {
+            return SpendingInsight(summary: "No delivered orders yet to analyse.",
+                                   topSupplier: nil,
+                                   topCategory: nil,
+                                   totalSpend: 0,
+                                   highlights: [])
         }
 
-        // Gemini request body
+        let prompt = buildSpendingPrompt(orders: delivered, suppliers: suppliers)
+        return try await callGeminiJSON(prompt: prompt, decoding: SpendingInsight.self)
+    }
+
+    // MARK: — Generic Gemini caller (JSON response)
+
+    private func callGeminiJSON<T: Decodable>(prompt: String, decoding type: T.Type) async throws -> T {
+        guard var components = URLComponents(string: baseURL) else { throw AppError.aiServiceFailed }
+        components.queryItems = [URLQueryItem(name: "key", value: Secrets.geminiAPIKey)]
+        guard let url = components.url else { throw AppError.aiServiceFailed }
+
         let requestBody: [String: Any] = [
-            "contents": [
-                [
-                    "parts": [
-                        ["text": prompt]
-                    ]
-                ]
-            ],
+            "contents": [["parts": [["text": prompt]]]],
             "generationConfig": [
                 "responseMimeType": "application/json",
-                "temperature": 0.2
+                "temperature": 0.3
             ]
         ]
 
@@ -46,45 +53,29 @@ final class AIService {
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let http = response as? HTTPURLResponse else {
-            throw AppError.aiServiceFailed
-        }
-
-        guard http.statusCode == 200 else {
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
             let body = String(data: data, encoding: .utf8) ?? "no body"
-            print("[AIService] Gemini HTTP \(http.statusCode): \(body)")
+            print("[AIService] Gemini error: \(body)")
             throw AppError.aiServiceFailed
         }
 
-        // Decode Gemini's response envelope
         let geminiResponse = try JSONDecoder().decode(GeminiResponse.self, from: data)
-
-        guard let text = geminiResponse.candidates.first?.content.parts.first?.text else {
-            print("[AIService] Gemini returned no text content")
-            throw AppError.aiServiceFailed
-        }
-
-        print("[AIService] Gemini raw text: \(text)")
-
-        // The text IS the JSON — decode ReorderResponse from it
-        guard let contentData = text.data(using: .utf8) else {
+        guard let text = geminiResponse.candidates.first?.content.parts.first?.text,
+              let contentData = text.data(using: .utf8) else {
             throw AppError.aiServiceFailed
         }
 
         do {
-            let reorderResponse = try JSONDecoder().decode(ReorderResponse.self, from: contentData)
-            return reorderResponse.recommendations
+            return try JSONDecoder().decode(type, from: contentData)
         } catch {
-            print("[AIService] JSON decode failed: \(error)")
-            print("[AIService] Raw content was: \(text)")
+            print("[AIService] Decode failed for \(type): \(error)\nRaw: \(text)")
             throw AppError.aiServiceFailed
         }
     }
 
-    // MARK: — Private
+    // MARK: — Prompts
 
-    private func buildPrompt(lowItems: [InventoryItem], suppliers: [Supplier]) -> String {
+    private func buildReorderPrompt(lowItems: [InventoryItem], suppliers: [Supplier]) -> String {
         let inventoryLines = lowItems.map { item -> String in
             let supplier = suppliers.first { $0.id == item.supplierID }
             let supplierName = supplier?.name ?? item.supplierName ?? "Unknown"
@@ -123,6 +114,57 @@ final class AIService {
         Low-stock inventory:
         \(inventoryLines)
         """
+    }
+
+    private func buildSpendingPrompt(orders: [Order], suppliers: [Supplier]) -> String {
+        // Aggregate spend by supplier
+        var supplierSpend: [String: Double] = [:]
+        var categorySpend: [String: Double] = [:]
+        var totalSpend: Double = 0
+
+        for order in orders {
+            supplierSpend[order.supplierName, default: 0] += order.totalCost
+            totalSpend += order.totalCost
+        }
+
+        // Match item category from supplier itemsSupplied where possible — use supplierName as proxy
+        // Build per-order lines
+        let orderLines = orders.map { o in
+            "- item: \(o.itemName), supplier: \(o.supplierName), qty: \(o.quantity) \(o.unit), cost: ₹\(Int(o.totalCost)), date: \(formatted(o.orderDate))"
+        }.joined(separator: "\n")
+
+        let supplierBreakdown = supplierSpend
+            .sorted { $0.value > $1.value }
+            .map { "- \($0.key): ₹\(Int($0.value))" }
+            .joined(separator: "\n")
+
+        return """
+        You are a spending analyst for a small café. Analyze the purchase history below.
+
+        STRICT OUTPUT RULES:
+        - Return ONLY a valid JSON object. No markdown. No explanation. No code fences.
+        - The JSON must have EXACTLY these keys:
+          * summary: string — 2-3 sentence plain English summary of spending patterns, mentioning the biggest cost driver and any notable trends. No technical jargon.
+          * topSupplier: string — name of supplier with highest spend
+          * topCategory: string — the item category or type that accounts for the most spend (infer from item names)
+          * totalSpend: number — total rupees spent across all orders
+          * highlights: array of strings — exactly 3 short bullet-point observations (max 12 words each)
+
+        Total orders: \(orders.count)
+        Total spend: ₹\(Int(totalSpend))
+
+        Supplier breakdown:
+        \(supplierBreakdown)
+
+        All delivered orders:
+        \(orderLines)
+        """
+    }
+
+    private func formatted(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        return f.string(from: date)
     }
 }
 

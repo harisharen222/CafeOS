@@ -93,6 +93,11 @@ struct DashboardView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 24)
 
+                    // ── Spending Insights inline card ──
+                    spendingInsightsCard
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+
                     // ── Needs Attention ────────────────────────
                     if !inventoryVM.lowStockItems.isEmpty {
                         sectionHeader("exclamationmark.triangle.fill", "NEEDS ATTENTION", color: .red)
@@ -384,6 +389,98 @@ struct DashboardView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .center)
                 .frame(height: 60)
+            }
+        }
+        .padding(16)
+        .background(Color.dashCard)
+        .cornerRadius(16)
+    }
+
+    // MARK: — Spending Insights Inline Card
+
+    @ViewBuilder
+    private var spendingInsightsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+
+            // Header row: internal "SPEND ANALYSIS" label + Refresh button
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.caption.bold())
+                        .foregroundColor(.green)
+                    Text("SPEND ANALYSIS")
+                        .font(.caption.bold())
+                        .foregroundColor(.green)
+                        .kerning(2)
+                }
+                Spacer()
+                Button {
+                    Task {
+                        await aiVM.fetchSpendingInsights(
+                            orders: orderVM.orders,
+                            suppliers: supplierVM.suppliers
+                        )
+                    }
+                } label: {
+                    Text("Refresh")
+                        .font(.caption.bold())
+                        .foregroundColor(.green)
+                }
+                .disabled(aiVM.isLoadingInsights)
+            }
+
+            // Content states
+            if aiVM.isLoadingInsights {
+                VStack(spacing: 8) {
+                    ProgressView().tint(.green)
+                    Text("Analyzing purchase history…")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 80)
+
+            } else if aiVM.hasLoadedInsights, let insight = aiVM.spendingInsight {
+                // Top Insight Line
+                Text(insight.summary)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+
+                // View all link
+                NavigationLink(destination: SpendingInsightsView()) {
+                    HStack(spacing: 4) {
+                        Text("View full analysis")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundColor(.green)
+                    }
+                }
+                .padding(.top, 4)
+
+            } else {
+                let deliveredCount = orderVM.orders.filter { $0.status == .received }.count
+                if deliveredCount > 0 {
+                    // Orders exist but AI not yet run
+                    HStack(spacing: 6) {
+                        Image(systemName: "info.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                        Text("\(deliveredCount) delivered orders ready for analysis")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: 60)
+                } else {
+                    Text("No purchase history to analyze")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(height: 60)
+                }
             }
         }
         .padding(16)
