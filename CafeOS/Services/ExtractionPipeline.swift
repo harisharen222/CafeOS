@@ -50,7 +50,10 @@ final class ExtractionPipeline {
                let http = response as? HTTPURLResponse,
                http.statusCode == 200,
                let body = String(data: data, encoding: .utf8),
-               body.trimmingCharacters(in: .whitespacesAndNewlines).count > 500 {
+               body.trimmingCharacters(in: .whitespacesAndNewlines).count > 500,
+               !body.lowercased().contains("<!doctype"),
+               !body.lowercased().contains("<html"),
+               !body.lowercased().contains("<!--->") {
                 return body
             }
         }
