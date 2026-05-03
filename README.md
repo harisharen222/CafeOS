@@ -43,15 +43,24 @@ This one took more time than expected.
 
 The idea was simple — paste a job listing URL, pull out the relevant content, export a clean PDF. The execution was not as simple.
 
-Most job sites (LinkedIn especially) block straightforward fetch requests. The page returns either a login wall or a redirect. So the approach ended up being a two-step thing: first try a direct GET with browser-like headers, and if that returns HTML instead of readable content, fall back to the Jina Reader API which handles the rendering and returns cleaner markdown.
+The first attempt was just a plain URLSession fetch. That obviously doesn't work for LinkedIn because it redirects you to a login page if you're not authenticated. After trying a few things, the approach that actually worked was spoofing browser headers on the request — setting a realistic User-Agent, Accept headers, Accept-Language, the works. If that still returns raw HTML instead of readable content, it falls back to the Jina Reader API, which handles the page rendering server-side and returns the content as markdown. That two-step fetch is Layer 1.
 
-Even after getting the content, the extracted text was full of noise — navigation links, sign-in modals, language selectors, sidebar metadata from the site's own UI. A lot of that had to be filtered out manually, line by line, which is kind of fragile but it works well enough for LinkedIn and Naukri listings.
+Even after getting readable content, the result was still a mess. A LinkedIn page returned by Jina is hundreds of lines — mostly navigation, sign-in modals, "people also viewed" sections, language selector links, sidebar metadata about job function and industry type. The actual job description is buried somewhere in the middle. So the next step was figuring out where the real content starts and ends.
 
-What works: job titles, company names, responsibilities, requirements — they come through reasonably clean for most listings.
+Layer 2 handles that. It does a few things in order: first it scans for LinkedIn's sign-in modal footer (the "by clicking continue to join or sign in" line) and discards everything up to and including that line, since the modal always appears before the job content. Then it looks for a stop marker like "similar jobs" or "people also viewed" to find the end. For the start of the actual job content, it tries three signals in order — looking for the second H1/H2 heading in the page (the first is usually the page title echo), then looking for the first long prose line that isn't a link or a heading, and finally falling back to known section anchors like "about the role" or "job description". Whatever slice of text is between those two boundaries is what gets passed forward.
 
-What doesn't always work: very dynamic pages that require JavaScript to render the actual job content, and sites that actively fingerprint requests. For those, the extractor either returns partial content or nothing useful.
+Layer 3 is just cleanup. By now the content is in the right region, but it still has markdown formatting artifacts — `**bold**` markers, `[text](url)` link syntax, image tags, tracking URLs, HR dividers made of dashes. This layer strips all of that out line by line and collapses excess blank lines, so what comes out is plain readable text.
 
-Honestly the filtering logic is the part I'd most want to rewrite if I had more time.
+Layer 4 takes that clean text and turns it into a structured object — a `JobDescription` with separate fields for title, company, location, employment type, about the role, responsibilities, and requirements. It runs a single pass through the lines using a simple state machine: once it hits a line that looks like a section header (short, not a bullet, matches known phrases like "responsibilities" or "qualifications"), it switches state and starts appending lines to the right bucket. Bullet lines in responsibilities and requirements go into arrays; everything else goes into the about section. There's also a bunch of skip rules for noise that makes it through anyway — LinkedIn metadata bullets like "Seniority level", Naukri sidebar fields like "Role:" and "Industry type:", sign-in CTA lines like "Join to apply", and single-character degree abbreviations that Naukri sometimes splits across lines.
+
+The result gets displayed in the app as a clean structured view, and the same object gets passed directly to the PDF generator — so what you see on screen and what ends up in the PDF are always in sync.
+
+What works: LinkedIn and Naukri job listings come through pretty well. Job title, company, location, responsibilities, and requirements are usually extracted correctly.
+
+What doesn't always work: sites that render job content entirely with JavaScript (the Jina fallback helps but isn't perfect), and pages that aggressively fingerprint API requests. For those, the extractor either returns partial content or nothing useful. Also some Naukri pages format their content in ways the state machine doesn't handle cleanly, so the section boundaries can be off.
+
+Honestly the window detection logic in Layer 2 is the most fragile part. It works for the sites I tested, but it'd probably need adjustments for any site that structures its pages differently.
+
 
 ---
 
