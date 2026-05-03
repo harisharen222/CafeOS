@@ -7,6 +7,7 @@ A take-home assignment project — an iOS app for managing a fictional café's d
 ## What this is
 
 The idea was to build something a café manager could actually use — tracking inventory, keeping supplier info in one place, and managing purchase orders without juggling spreadsheets. Nothing too complex, just a clean app that covers the basics and doesn't get in the way.
+I Used Claude and Cursor for code generation, architectural decisions and debugging were my own."
 
 ---
 
@@ -63,6 +64,9 @@ Honestly the window detection logic in Layer 2 is the most fragile part. It work
 
 
 ---
+
+## Video Simulation
+https://www.loom.com/share/2b4e10f6a7f1485cbcce3d404fb0c437
 
 ## How to run it
 
