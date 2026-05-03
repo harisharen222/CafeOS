@@ -102,7 +102,9 @@ struct URLExtractorView: View {
 
                     // Result
                     if viewModel.hasResult {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 12) {
+
+                            // Content header row
                             HStack {
                                 Text("Extracted Content")
                                     .font(.subheadline.bold())
@@ -116,14 +118,44 @@ struct URLExtractorView: View {
                             }
                             .padding(.horizontal)
 
+                            // Extracted text — Fix 2: caption font with line spacing
                             Text(viewModel.extractedContent)
-                                .font(.system(.caption, design: .monospaced))
+                                .font(.caption)
+                                .lineSpacing(4)
                                 .foregroundColor(.white)
                                 .padding()
                                 .background(Color.dashCard)
                                 .cornerRadius(10)
                                 .textSelection(.enabled)
                                 .padding(.horizontal)
+
+                            // Export as PDF button
+                            Button {
+                                viewModel.generatePDF()
+                            } label: {
+                                if viewModel.isGeneratingPDF {
+                                    HStack(spacing: 8) {
+                                        ProgressView().tint(.white)
+                                        Text("Generating PDF…")
+                                            .fontWeight(.semibold)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                } else {
+                                    Label("Export as PDF", systemImage: "arrow.down.doc.fill")
+                                        .fontWeight(.semibold)
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .padding()
+                            .background(viewModel.isGeneratingPDF
+                                        ? Color.dashCard
+                                        : Color.dashMaroon)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                            .disabled(viewModel.extractedContent
+                                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                      || viewModel.isGeneratingPDF)
+                            .padding(.horizontal)
                         }
                     }
 
@@ -143,5 +175,22 @@ struct URLExtractorView: View {
                 }
             }
         }
+        .sheet(isPresented: $viewModel.showShareSheet) {
+            if let url = viewModel.pdfFileURL {
+                ShareSheet(activityItems: [url])
+            }
+        }
     }
+}
+
+// MARK: — UIActivityViewController wrapper
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems,
+                                 applicationActivities: nil)
+    }
+    func updateUIViewController(_ uvc: UIActivityViewController, context: Context) {}
 }

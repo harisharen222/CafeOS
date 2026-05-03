@@ -50,11 +50,21 @@ final class URLExtractorService {
             throw AppError.urlExtractionFailed
         }
 
-        let content = String(data: data, encoding: .utf8) ?? ""
-        guard !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw AppError.urlExtractionFailed
+        let rawString = String(data: data, encoding: .utf8) ?? ""
+
+        // Attempt to unwrap Jina JSON envelope: { "data": { "content": "..." } }
+        if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let dataObject = jsonObject["data"] as? [String: Any],
+           let content = dataObject["content"] as? String,
+           !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return content
         }
 
-        return content
+        // Fallback: return raw string if non-empty
+        if !rawString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return rawString
+        }
+
+        throw AppError.urlExtractionFailed
     }
 }

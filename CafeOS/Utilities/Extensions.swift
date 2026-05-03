@@ -35,3 +35,10 @@ extension Int {
         return formatter.string(from: NSNumber(value: self)) ?? "\(self)"
     }
 }
+
+// MARK: — String helpers
+extension String {
+    var nilIfEmpty: String? {
+        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
+    }
+}
