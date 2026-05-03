@@ -6,118 +6,151 @@ struct ReorderAdvisorView: View {
     @EnvironmentObject var aiVM: AIViewModel
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        ZStack {
+            Color.dashBackground.ignoresSafeArea()
 
-                // Header explanation
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Smart Reorder Advisor")
-                        .font(.title2.bold())
-                    Text("AI-powered analysis of your low-stock items. Recommendations are sorted by urgency.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal)
-                .padding(.top)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
 
-                // No low-stock items state
-                if inventoryVM.lowStockItems.isEmpty && !aiVM.isLoading {
-                    EmptyStateView(
-                        icon: "checkmark.seal.fill",
-                        title: "All stocked up!",
-                        subtitle: "No items are currently below their reorder threshold."
-                    )
-                    .padding(.top, 40)
-
-                // Error state
-                } else if aiVM.showError {
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 40))
-                            .foregroundColor(.orange)
-                        Text(aiVM.errorMessage ?? AppError.aiServiceFailed.errorDescription ?? "")
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.secondary)
-                        Button("Try Again") {
-                            Task {
-                                await aiVM.fetchRecommendations(
-                                    items: inventoryVM.items,
-                                    suppliers: supplierVM.suppliers
-                                )
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.brown)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 40)
-
-                // Loading state
-                } else if aiVM.isLoading {
-                    VStack(spacing: 16) {
-                        ProgressView()
-                            .scaleEffect(1.4)
-                        Text("Analyzing your inventory…")
+                    // Header explanation
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Smart Reorder Advisor")
+                            .font(.title2.bold())
+                            .foregroundColor(.white)
+                        Text("AI-powered analysis of your low-stock items. Recommendations are sorted by urgency.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 60)
+                    .padding(.horizontal)
+                    .padding(.top)
 
-                // Results
-                } else if aiVM.hasLoaded {
-                    if aiVM.recommendations.isEmpty {
-                        EmptyStateView(
-                            icon: "checkmark.seal.fill",
-                            title: "All good!",
-                            subtitle: "No reorder recommendations at this time."
-                        )
-                    } else {
-                        VStack(spacing: 12) {
-                            ForEach(aiVM.sortedRecommendations) { advice in
-                                ReorderAdviceCard(advice: advice)
-                            }
-                        }
-                        .padding(.horizontal)
-                    }
-
-                // Pre-load state — show low stock summary before tapping refresh
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("\(inventoryVM.lowStockItems.count) item(s) need attention")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                        ForEach(inventoryVM.lowStockItems) { item in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.name).font(.subheadline.bold())
-                                    Text("\(String(format: "%.1f", item.quantity)) / \(String(format: "%.1f", item.minimumThreshold)) \(item.unit)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Text("LOW")
-                                    .font(.caption.bold())
+                    // No low-stock items state — vertically centred
+                    if inventoryVM.lowStockItems.isEmpty && !aiVM.isLoading {
+                        VStack {
+                            Spacer()
+                            VStack(spacing: 16) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.system(size: 64))
+                                    .foregroundColor(.green)
+                                Text("All stocked up!")
+                                    .font(.title3.bold())
                                     .foregroundColor(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(Color.red)
-                                    .cornerRadius(6)
+                                Text("No items are currently below their reorder threshold.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .multilineTextAlignment(.center)
                             }
-                            .padding()
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(10)
+                            .padding(.horizontal, 32)
+                            Spacer()
+                        }
+                        .frame(minHeight: 300)
+
+                    // Error state
+                    } else if aiVM.showError {
+                        VStack(spacing: 16) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 40))
+                                .foregroundColor(.orange)
+                            Text(aiVM.errorMessage ?? AppError.aiServiceFailed.errorDescription ?? "")
+                                .font(.subheadline)
+                                .multilineTextAlignment(.center)
+                                .foregroundColor(.secondary)
+                            Button("Try Again") {
+                                Task {
+                                    await aiVM.fetchRecommendations(
+                                        items: inventoryVM.items,
+                                        suppliers: supplierVM.suppliers
+                                    )
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color.dashCrimson)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 40)
+
+                    // Loading state
+                    } else if aiVM.isLoading {
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .scaleEffect(1.4)
+                                .tint(Color.dashCrimson)
+                            Text("Analyzing your inventory…")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+
+                    // Results
+                    } else if aiVM.hasLoaded {
+                        if aiVM.recommendations.isEmpty {
+                            VStack {
+                                Spacer()
+                                VStack(spacing: 16) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .font(.system(size: 64))
+                                        .foregroundColor(.green)
+                                    Text("All good!")
+                                        .font(.title3.bold())
+                                        .foregroundColor(.white)
+                                    Text("No reorder recommendations at this time.")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                        .multilineTextAlignment(.center)
+                                }
+                                .padding(.horizontal, 32)
+                                Spacer()
+                            }
+                            .frame(minHeight: 300)
+                        } else {
+                            VStack(spacing: 12) {
+                                ForEach(aiVM.sortedRecommendations) { advice in
+                                    ReorderAdviceCard(advice: advice)
+                                }
+                            }
                             .padding(.horizontal)
+                        }
+
+                    // Pre-load state — show low stock summary before tapping refresh
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(inventoryVM.lowStockItems.count) item(s) need attention")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+                            ForEach(inventoryVM.lowStockItems) { item in
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.name).font(.subheadline.bold())
+                                            .foregroundColor(.white)
+                                        Text("\(String(format: "%.1f", item.quantity)) / \(String(format: "%.1f", item.minimumThreshold)) \(item.unit)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Text("LOW")
+                                        .font(.caption.bold())
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(Color.red)
+                                        .cornerRadius(6)
+                                }
+                                .padding()
+                                .background(Color.dashCard)
+                                .cornerRadius(12)
+                                .padding(.horizontal)
+                            }
                         }
                     }
                 }
+                .padding(.bottom, 32)
             }
-            .padding(.bottom, 32)
         }
         .navigationTitle("Reorder Advisor")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -132,6 +165,7 @@ struct ReorderAdvisorView: View {
                         Image(systemName: "sparkles")
                         Text("Refresh")
                     }
+                    .foregroundColor(Color.dashCrimson)
                 }
                 .disabled(aiVM.isLoading)
             }
@@ -154,7 +188,7 @@ private struct ReorderAdviceCard: View {
 
     var urgencyColor: Color {
         switch advice.urgency {
-        case "critical": return .red
+        case "critical": return Color.dashCrimson
         case "high":     return .orange
         default:         return .yellow
         }
@@ -175,6 +209,7 @@ private struct ReorderAdviceCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(advice.itemName)
                         .font(.headline)
+                        .foregroundColor(.white)
                     Text(advice.reason)
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -190,7 +225,7 @@ private struct ReorderAdviceCard: View {
                     .cornerRadius(8)
             }
 
-            Divider()
+            Divider().background(Color.white.opacity(0.1))
 
             // Details row
             HStack(spacing: 20) {
@@ -200,6 +235,7 @@ private struct ReorderAdviceCard: View {
                         .foregroundColor(.secondary)
                     Text("\(String(format: "%.0f", advice.recommendedQty)) \(advice.unit)")
                         .font(.subheadline.bold())
+                        .foregroundColor(.white)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Supplier")
@@ -207,6 +243,7 @@ private struct ReorderAdviceCard: View {
                         .foregroundColor(.secondary)
                     Text(advice.supplierName)
                         .font(.subheadline)
+                        .foregroundColor(.white)
                         .lineLimit(1)
                 }
                 VStack(alignment: .leading, spacing: 2) {
@@ -215,6 +252,7 @@ private struct ReorderAdviceCard: View {
                         .foregroundColor(.secondary)
                     Text("\(advice.deliveryDays)d")
                         .font(.subheadline)
+                        .foregroundColor(.white)
                 }
                 Spacer()
                 if advice.orderToday {
@@ -223,13 +261,13 @@ private struct ReorderAdviceCard: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.brown)
+                        .background(Color.dashMaroon)
                         .cornerRadius(8)
                 }
             }
         }
         .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
+        .background(Color.dashCard)
+        .cornerRadius(16)
     }
 }

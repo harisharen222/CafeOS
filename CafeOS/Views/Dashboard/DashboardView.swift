@@ -7,6 +7,7 @@ struct DashboardView: View {
     @EnvironmentObject var inventoryVM: InventoryViewModel
     @EnvironmentObject var supplierVM: SupplierViewModel
     @EnvironmentObject var orderVM: OrderViewModel
+    @EnvironmentObject var aiVM: AIViewModel
 
     @State private var notificationScheduled: Bool = false
 
@@ -87,19 +88,10 @@ struct DashboardView: View {
                     activityRow
                         .padding(.horizontal, 16)
 
-                    // ── AI Insights ────────────────────────────
-                    sectionHeader("sparkles", "AI INSIGHTS")
-                        .padding(.top, 24)
-
-                    aiAdvisorCard
+                    // ── AI Insights inline card (no external header) ──
+                    aiInsightsCard
                         .padding(.horizontal, 16)
-
-                    // ── Quick Actions ──────────────────────────
-                    sectionHeader("bolt.fill", "QUICK ACTIONS")
                         .padding(.top, 24)
-
-                    quickActionsCard
-                        .padding(.horizontal, 16)
 
                     // ── Needs Attention ────────────────────────
                     if !inventoryVM.lowStockItems.isEmpty {
@@ -123,17 +115,6 @@ struct DashboardView: View {
                         .padding(.horizontal, 16)
                         .padding(.top, 16)
                     }
-
-                    // ── Debug seed button ──────────────────────
-                    #if DEBUG
-                    Button("Seed Demo Data") {
-                        Task { await SeedData.populate(firestoreService: FirestoreService()) }
-                    }
-                    .font(.caption2)
-                    .foregroundColor(Color.white.opacity(0.2))
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 24)
-                    #endif
 
                     Spacer(minLength: 40)
                 }
@@ -230,32 +211,43 @@ struct DashboardView: View {
     // MARK: — Stock Distribution Card
 
     private var stockDistributionCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("Stock Distribution")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
             GeometryReader { geo in
-                HStack(spacing: 3) {
-                    if inStockFraction > 0 {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.green)
-                            .frame(width: max(geo.size.width * CGFloat(inStockFraction), 0))
-                    }
-                    if lowFraction > 0 {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.orange)
-                            .frame(width: max(geo.size.width * CGFloat(lowFraction), 0))
-                    }
-                    if outFraction > 0 || outOfStockCount > 0 {
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.red)
-                            .frame(width: max(geo.size.width * CGFloat(outFraction), outOfStockCount > 0 ? 8 : 0))
+                Group {
+                    if totalItems == 0 {
+                        // Empty state — full-width gray bar
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.white.opacity(0.12))
+                            .frame(width: geo.size.width, height: 10)
+                    } else {
+                        HStack(spacing: 3) {
+                            if inStockFraction > 0 {
+                                RoundedRectangle(cornerRadius: 5)
+                                    .fill(Color.green)
+                                    .frame(width: max(geo.size.width * CGFloat(inStockFraction), 0))
+                            }
+                            if lowFraction > 0 {
+                                RoundedRectangle(cornerRadius: 5)
+                                    .fill(Color.orange)
+                                    .frame(width: max(geo.size.width * CGFloat(lowFraction), 0))
+                            }
+                            if outFraction > 0 || outOfStockCount > 0 {
+                                RoundedRectangle(cornerRadius: 5)
+                                    .fill(Color.red)
+                                    .frame(width: max(geo.size.width * CGFloat(outFraction),
+                                                      outOfStockCount > 0 ? 10 : 0))
+                            }
+                        }
+                        .frame(height: 10)
                     }
                 }
-                .frame(height: 8)
             }
-            .frame(height: 8)
+            .frame(height: 10)
+            .padding(.vertical, 12)
 
             HStack {
                 Label("In Stock", systemImage: "circle.fill")
@@ -276,7 +268,7 @@ struct DashboardView: View {
         .cornerRadius(16)
     }
 
-    // MARK: — Activity Row (2 cards)
+    // MARK: — Activity Row (2 fixed-height cards)
 
     private var activityRow: some View {
         HStack(spacing: 10) {
@@ -285,72 +277,116 @@ struct DashboardView: View {
                 iconBg: Color.dashMaroon.opacity(0.25),
                 iconColor: Color.dashCrimson,
                 value: "\(pendingOrderCount)",
-                label: "Pending\nOrders"
+                label: "Pending Orders"
             )
             ActivityCard(
                 icon: "indianrupeesign.circle.fill",
                 iconBg: Color.blue.opacity(0.15),
                 iconColor: .blue,
                 value: "₹\(Int(totalOwed).formattedWithCommas)",
-                label: "Amount\nOwed"
+                label: "Amount Owed"
             )
         }
     }
 
-    // MARK: — AI Advisor Card
+    // MARK: — AI Insights Inline Card
 
-    private var aiAdvisorCard: some View {
-        NavigationLink(destination: ReorderAdvisorView()) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.dashMaroon)
-                        .frame(width: 44, height: 44)
+    @ViewBuilder
+    private var aiInsightsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+
+            // Header row: internal "INSIGHTS" label + Refresh button
+            HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "sparkles")
-                        .foregroundColor(.white)
-                        .font(.title3)
+                        .font(.caption.bold())
+                        .foregroundColor(.dashCrimson)
+                    Text("INSIGHTS")
+                        .font(.caption.bold())
+                        .foregroundColor(.dashCrimson)
+                        .kerning(2)
                 }
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Smart Reorder Advisor")
-                        .font(.subheadline.bold())
-                        .foregroundColor(.white)
-                    Text("AI-powered low-stock analysis →")
+                Spacer()
+                Button {
+                    Task {
+                        await aiVM.fetchRecommendations(
+                            items: inventoryVM.items,
+                            suppliers: supplierVM.suppliers
+                        )
+                    }
+                } label: {
+                    Text("Refresh")
+                        .font(.caption.bold())
+                        .foregroundColor(.dashCrimson)
+                }
+                .disabled(aiVM.isLoading)
+            }
+
+            // Content states
+            if aiVM.isLoading {
+                VStack(spacing: 8) {
+                    ProgressView().tint(.dashCrimson)
+                    Text("Analysing inventory…")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                Spacer()
-                if lowStockCount > 0 {
-                    Text("\(lowStockCount)")
-                        .font(.caption.bold())
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.dashCrimson)
-                        .cornerRadius(8)
+                .frame(maxWidth: .infinity)
+                .frame(height: 80)
+
+            } else if aiVM.hasLoaded && !aiVM.sortedRecommendations.isEmpty {
+                // Top 2 recommendations inline
+                VStack(spacing: 8) {
+                    ForEach(aiVM.sortedRecommendations.prefix(2)) { advice in
+                        InlineAdviceRow(advice: advice)
+                    }
                 }
-                Image(systemName: "chevron.right")
+
+                // View all link
+                NavigationLink(destination: ReorderAdvisorView()) {
+                    HStack(spacing: 4) {
+                        Text("View all \(aiVM.recommendations.count) recommendations")
+                            .font(.caption)
+                            .foregroundColor(.dashCrimson)
+                        Image(systemName: "arrow.right")
+                            .font(.caption2)
+                            .foregroundColor(.dashCrimson)
+                    }
+                }
+                .padding(.top, 4)
+
+            } else if aiVM.hasLoaded && aiVM.recommendations.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                    Text("All items well stocked")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            } else if lowStockCount == 0 {
+                // No low-stock items, not yet run
+                Text("No low-stock items to analyse")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .frame(height: 60)
+
+            } else {
+                // Low stock exists but AI not yet run
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                    Text("\(lowStockCount) items need attention — tap Refresh")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(height: 60)
             }
-            .padding(16)
-            .background(Color.dashCard)
-            .cornerRadius(16)
         }
-    }
-
-    // MARK: — Quick Actions Card
-
-    private var quickActionsCard: some View {
-        VStack(spacing: 0) {
-            QuickActionRow(icon: "archivebox.fill", iconColor: Color.dashCrimson,
-                           title: "View Inventory", subtitle: "Browse all items and stock levels")
-            Divider().background(Color.white.opacity(0.07)).padding(.leading, 58)
-            QuickActionRow(icon: "person.2.fill", iconColor: .blue,
-                           title: "Manage Suppliers", subtitle: "Contacts, balances, lead times")
-            Divider().background(Color.white.opacity(0.07)).padding(.leading, 58)
-            QuickActionRow(icon: "cart.fill", iconColor: .orange,
-                           title: "View Orders", subtitle: "Track pending and received orders")
-        }
+        .padding(16)
         .background(Color.dashCard)
         .cornerRadius(16)
     }
@@ -439,56 +475,66 @@ private struct ActivityCard: View {
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(value)
-                    .font(.title3.bold())
+                    .font(.title2.bold())
                     .foregroundColor(.white)
                 Text(label)
                     .font(.caption2)
                     .foregroundColor(.secondary)
+                    .lineLimit(1)
             }
             Spacer()
         }
         .padding(16)
         .frame(maxWidth: .infinity)
+        .frame(height: 100)
         .background(Color.dashCard)
         .cornerRadius(16)
     }
 }
 
-private struct QuickActionRow: View {
-    let icon: String
-    let iconColor: Color
-    let title: String
-    let subtitle: String
+private struct InlineAdviceRow: View {
+    let advice: ReorderAdvice
+
+    private var urgencyColor: Color {
+        switch advice.urgency {
+        case "critical": return Color.dashCrimson
+        case "high":     return .orange
+        default:         return .yellow
+        }
+    }
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(iconColor.opacity(0.15))
-                    .frame(width: 36, height: 36)
-                Image(systemName: icon)
-                    .font(.system(size: 15))
-                    .foregroundColor(iconColor)
-            }
+        HStack(spacing: 10) {
+            // Left urgency bar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(urgencyColor)
+                .frame(width: 3)
+                .frame(minHeight: 36)
+
             VStack(alignment: .leading, spacing: 2) {
-                Text(title)
+                Text(advice.itemName)
                     .font(.subheadline.bold())
                     .foregroundColor(.white)
-                Text(subtitle)
+                Text(advice.reason)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                    .lineLimit(2)
             }
+
             Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(Color.white.opacity(0.25))
+
+            Text(advice.urgency.capitalized)
+                .font(.caption2.bold())
+                .foregroundColor(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(urgencyColor)
+                .cornerRadius(6)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
     }
 }
 
-// Keep MetricCard for backward compat if anything else references it
+// Keep MetricCard for backward compat
 struct MetricCard: View {
     let title: String
     let value: String
