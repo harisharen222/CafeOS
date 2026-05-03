@@ -18,7 +18,7 @@ struct URLExtractorView: View {
                         Label("Job URL Extractor", systemImage: "link")
                             .font(.headline)
                             .foregroundColor(.white)
-                        Text("Paste a job listing URL from LinkedIn, Indeed, Naukri, or any site. The app fetches and extracts the job description — even when direct scraping is blocked.")
+                        Text("Paste a job listing URL from LinkedIn, Indeed, Naukri, or any site. The app fetches and extracts the job description.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
