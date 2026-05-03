@@ -106,25 +106,28 @@ final class ExtractionPipeline {
     private func detectWindow(in raw: String) -> String {
         let lines = raw.components(separatedBy: .newlines)
 
-        // ── Fix 1: skip past LinkedIn sign-in modal ───────────────────────────
-        // Scan for the LAST occurrence of known modal footer lines and discard
-        // everything up to and including that line. Signal A/B/C then operate
-        // on post-modal content only, so the window never starts inside the modal.
+        // ── Skip past LinkedIn sign-in modal ─────────────────────────────────
+        // Find the FIRST occurrence of a known modal anchor and discard everything
+        // up to and including that line. The first match is always inside the top
+        // navigation modal — not repeated later in the document.
+        // "cookie policy." is intentionally excluded: it appears too many times.
+        // If neither anchor is found (non-LinkedIn URLs), postModal == lines.
         let modalMarkers: [String] = [
             "by clicking continue to join or sign in",
-            "cookie policy.",
             "agree & join linkedin"
         ]
         var modalCutIndex = -1
         for (i, line) in lines.enumerated() {
             let lowerLine = line.lowercased()
             if modalMarkers.contains(where: { lowerLine.contains($0) }) {
-                modalCutIndex = i   // keep updating — we want the LAST match
+                modalCutIndex = i   // first match — stop immediately
+                break
             }
         }
         let postModal = modalCutIndex >= 0
             ? Array(lines[(modalCutIndex + 1)...])
             : lines
+
 
         // ── END boundary — first line that matches a stop marker ──────────────
         let stopMarkers: [String] = [
