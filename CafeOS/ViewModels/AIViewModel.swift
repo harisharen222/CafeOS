@@ -21,7 +21,7 @@ final class AIViewModel: ObservableObject {
             recommendations = try await service.getReorderAdvice(items: items, suppliers: suppliers)
             hasLoaded = true
         } catch {
-            errorMessage = AppError.aiServiceFailed.errorDescription
+            errorMessage = error.localizedDescription
             showError = true
         }
     }
@@ -42,7 +42,7 @@ final class AIViewModel: ObservableObject {
             spendingInsight = try await service.getSpendingInsights(orders: orders, suppliers: suppliers)
             hasLoadedInsights = true
         } catch {
-            errorMessage = AppError.aiServiceFailed.errorDescription
+            errorMessage = error.localizedDescription
             showError = true
         }
     }

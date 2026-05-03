@@ -60,16 +60,29 @@ final class AIService {
         }
 
         let geminiResponse = try JSONDecoder().decode(GeminiResponse.self, from: data)
-        guard let text = geminiResponse.candidates.first?.content.parts.first?.text,
-              let contentData = text.data(using: .utf8) else {
-            throw AppError.aiServiceFailed
+        guard let text = geminiResponse.candidates.first?.content.parts.first?.text else {
+            throw NSError(domain: "AIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "No text in Gemini response."])
+        }
+        var cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanText.hasPrefix("```json") {
+            cleanText = String(cleanText.dropFirst(7))
+        } else if cleanText.hasPrefix("```") {
+            cleanText = String(cleanText.dropFirst(3))
+        }
+        if cleanText.hasSuffix("```") {
+            cleanText = String(cleanText.dropLast(3))
+        }
+        cleanText = cleanText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let contentData = cleanText.data(using: .utf8) else {
+            throw NSError(domain: "AIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode cleaned text to data."])
         }
 
         do {
             return try JSONDecoder().decode(type, from: contentData)
         } catch {
-            print("[AIService] Decode failed for \(type): \(error)\nRaw: \(text)")
-            throw AppError.aiServiceFailed
+            print("[AIService] Decode failed for \(type): \(error)\nRaw: \(cleanText)")
+            throw NSError(domain: "AIService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Decode failed: \(error.localizedDescription)"])
         }
     }
 
