@@ -438,21 +438,35 @@ final class ExtractionPipeline {
             case .requirements:
                 if isBullet(line) {
                     let bt = bulletText(line)
-                    // Fix 3: skip LinkedIn metadata bullets (### Seniority level, etc.)
-                    let isMetadata = bt.hasPrefix("###") ||
-                                     bt.lowercased().contains("seniority level") ||
-                                     bt.lowercased().contains("employment type") ||
-                                     bt.lowercased().contains("job function") ||
-                                     bt.lowercased().contains("industries")
-                    if !isMetadata { requirements.append(bt) }
+                    let btLower = bt.lowercased()
+                    // Skip LinkedIn metadata bullets (### Seniority level, etc.)
+                    let isLinkedInMeta = bt.hasPrefix("###") ||
+                                         btLower.contains("seniority level") ||
+                                         btLower.contains("employment type") ||
+                                         btLower.contains("job function") ||
+                                         btLower.contains("industries")
+                    // Skip Naukri sidebar metadata fields (Role:, Industry Type:, etc.)
+                    let naukriMetaPrefixes = [
+                        "role:", "industry type:", "department:",
+                        "employment type:", "role category:",
+                        "ug:", "pg:", "education:"
+                    ]
+                    let isNaukriMeta = naukriMetaPrefixes.contains(where: { btLower.hasPrefix($0) })
+                    // Skip single-char or split degree abbreviations (b, sc, tech alone)
+                    let splitDegreeTokens: Set<String> = ["b", "sc", "tech"]
+                    let isSplitDegree = bt.count <= 1 || splitDegreeTokens.contains(btLower)
+                    if !isLinkedInMeta && !isNaukriMeta && !isSplitDegree {
+                        requirements.append(bt)
+                    }
                 } else if line.count > 30 {
-                    // Fix 3: also drop LinkedIn industry/function tag value lines
+                    // Drop LinkedIn industry/function tag value lines
                     let isIndustryTag = lower.contains("engineering and information technology") ||
                                         lower.contains("computer hardware") ||
                                         lower.contains("semiconductor") ||
                                         lower.contains("information technology")
                     if !isIndustryTag { requirements.append(line) }
                 }
+
             case .additional:
                 additionalLines.append(line)
             case .done:
