@@ -88,6 +88,11 @@ struct DashboardView: View {
                     activityRow
                         .padding(.horizontal, 16)
 
+                    // ── Spending Insights inline card ──
+                    spendingInsightsCard
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+
                     // ── Needs Attention ────────────────────────
                     if !inventoryVM.lowStockItems.isEmpty {
                         HStack {
