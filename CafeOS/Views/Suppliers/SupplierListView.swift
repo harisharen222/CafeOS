@@ -82,8 +82,9 @@ struct SupplierListView: View {
                         }
                     }
                     .padding(16)
+                    .frame(height: 100)
                     .background(Color.dashCard)
-                    .cornerRadius(12)
+                    .cornerRadius(16)
                     .padding(.horizontal, 16)
                     .padding(.top, 4)
 

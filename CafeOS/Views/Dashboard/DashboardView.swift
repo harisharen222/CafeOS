@@ -481,6 +481,7 @@ private struct ActivityCard: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.5)
             }
             Spacer()
         }
