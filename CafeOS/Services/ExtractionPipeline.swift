@@ -287,7 +287,11 @@ final class ExtractionPipeline {
 
             // ── TITLE ──────────────────────────────────────────────────────────
             if title.isEmpty {
-                if !line.hasPrefix("http") && !line.hasPrefix("[") && line.count > 3 {
+                // Fix 1: skip sign-in / join CTA lines — they are not job titles
+                let isTitleNoise = lower.contains("sign in") ||
+                                   lower.contains("join or") ||
+                                   lower.contains("join to apply")
+                if !isTitleNoise && !line.hasPrefix("http") && !line.hasPrefix("[") && line.count > 3 {
                     // LinkedIn pattern: "Job Title | Company | LinkedIn" → take first segment
                     if line.contains(" | ") {
                         title = line.components(separatedBy: " | ").first?
@@ -378,7 +382,11 @@ final class ExtractionPipeline {
                     aboutLines.append(line)
                 }
             case .about:
-                aboutLines.append(line)
+                // Fix 2: skip LinkedIn CTA lines that leak through window detection
+                let isAboutNoise = lower.contains("join to apply") ||
+                                   lower.contains("select your language preference") ||
+                                   lower.contains("sign in to")
+                if !isAboutNoise { aboutLines.append(line) }
             case .responsibilities:
                 if isBullet(line) {
                     responsibilities.append(bulletText(line))
@@ -387,7 +395,14 @@ final class ExtractionPipeline {
                 }
             case .requirements:
                 if isBullet(line) {
-                    requirements.append(bulletText(line))
+                    let bt = bulletText(line)
+                    // Fix 3: skip LinkedIn metadata bullets (### Seniority level, etc.)
+                    let isMetadata = bt.hasPrefix("###") ||
+                                     bt.lowercased().contains("seniority level") ||
+                                     bt.lowercased().contains("employment type") ||
+                                     bt.lowercased().contains("job function") ||
+                                     bt.lowercased().contains("industries")
+                    if !isMetadata { requirements.append(bt) }
                 } else if line.count > 30 {
                     requirements.append(line)
                 }
