@@ -106,21 +106,42 @@ final class ExtractionPipeline {
     private func detectWindow(in raw: String) -> String {
         let lines = raw.components(separatedBy: .newlines)
 
+        // ── Fix 1: skip past LinkedIn sign-in modal ───────────────────────────
+        // Scan for the LAST occurrence of known modal footer lines and discard
+        // everything up to and including that line. Signal A/B/C then operate
+        // on post-modal content only, so the window never starts inside the modal.
+        let modalMarkers: [String] = [
+            "by clicking continue to join or sign in",
+            "cookie policy.",
+            "agree & join linkedin"
+        ]
+        var modalCutIndex = -1
+        for (i, line) in lines.enumerated() {
+            let lowerLine = line.lowercased()
+            if modalMarkers.contains(where: { lowerLine.contains($0) }) {
+                modalCutIndex = i   // keep updating — we want the LAST match
+            }
+        }
+        let postModal = modalCutIndex >= 0
+            ? Array(lines[(modalCutIndex + 1)...])
+            : lines
+
         // ── END boundary — first line that matches a stop marker ──────────────
         let stopMarkers: [String] = [
             "similar jobs", "people also viewed", "people also searched",
             "referrals increase", "more searches", "explore top content",
             "linkedin©", "show more jobs", "© linkedin"
         ]
-        var endIndex = lines.count
-        for (i, line) in lines.enumerated() {
+        var endIndex = postModal.count
+        for (i, line) in postModal.enumerated() {
             let lower = line.lowercased()
             if stopMarkers.contains(where: { lower.contains($0) }) {
                 endIndex = i
                 break
             }
         }
-        let bounded = Array(lines[0..<endIndex])
+        let bounded = Array(postModal[0..<endIndex])
+
 
         // ── START boundary ────────────────────────────────────────────────────
         var startIndex = 0
@@ -378,7 +399,11 @@ final class ExtractionPipeline {
             switch state {
             case .header:
                 // Before any section — treat as about/intro if substantial
-                if line.count > 40 && !line.hasPrefix("http") {
+                // Also apply the same CTA noise filter as the ABOUT state
+                let isHeaderNoise = lower.contains("join to apply") ||
+                                    lower.contains("sign in to") ||
+                                    lower.contains("select your language preference")
+                if line.count > 40 && !line.hasPrefix("http") && !isHeaderNoise {
                     aboutLines.append(line)
                 }
             case .about:
@@ -404,7 +429,12 @@ final class ExtractionPipeline {
                                      bt.lowercased().contains("industries")
                     if !isMetadata { requirements.append(bt) }
                 } else if line.count > 30 {
-                    requirements.append(line)
+                    // Fix 3: also drop LinkedIn industry/function tag value lines
+                    let isIndustryTag = lower.contains("engineering and information technology") ||
+                                        lower.contains("computer hardware") ||
+                                        lower.contains("semiconductor") ||
+                                        lower.contains("information technology")
+                    if !isIndustryTag { requirements.append(line) }
                 }
             case .additional:
                 additionalLines.append(line)
