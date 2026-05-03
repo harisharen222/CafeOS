@@ -250,6 +250,9 @@ final class ExtractionPipeline {
                 clean = re.stringByReplacingMatches(in: clean, range: r, withTemplate: "$1")
             }
             // **bold** → bold
+            // Pre-pass: adjacent bold segments (**A****B** → **A** **B**) get a space
+            // inserted so the strip doesn't concatenate them.
+            clean = clean.replacingOccurrences(of: "****", with: "** **")
             if let re = bold {
                 let r = NSRange(clean.startIndex..., in: clean)
                 clean = re.stringByReplacingMatches(in: clean, range: r, withTemplate: "$1")
@@ -311,11 +314,16 @@ final class ExtractionPipeline {
 
             // ── TITLE ──────────────────────────────────────────────────────────
             if title.isEmpty {
-                // Fix 1: skip sign-in / join CTA lines — they are not job titles
-                let isTitleNoise = lower.contains("sign in") ||
+                // Hardened: reject form field labels, sign-in CTAs, and very short lines
+                let isTitleNoise = line.count < 5 ||
+                                   lower.contains("email or phone") ||
+                                   lower.contains("password") ||
+                                   lower == "show" ||
+                                   lower.contains("sign in") ||
+                                   lower.contains("join now") ||
                                    lower.contains("join or") ||
                                    lower.contains("join to apply")
-                if !isTitleNoise && !line.hasPrefix("http") && !line.hasPrefix("[") && line.count > 3 {
+                if !isTitleNoise && !line.hasPrefix("http") && !line.hasPrefix("[") {
                     // LinkedIn pattern: "Job Title | Company | LinkedIn" → take first segment
                     if line.contains(" | ") {
                         title = line.components(separatedBy: " | ").first?
@@ -399,6 +407,12 @@ final class ExtractionPipeline {
             if state == .done { break }
 
             // ── CONTENT ASSIGNMENT ──────────────────────────────────────────────
+            // Fix 2: shared guard — skip LinkedIn form field labels in every state
+            let formFieldLabels: Set<String> = [
+                "email or phone", "password", "show", "sign in", "join now"
+            ]
+            if line.count < 4 || formFieldLabels.contains(lower) { continue }
+
             switch state {
             case .header:
                 // Before any section — treat as about/intro if substantial
