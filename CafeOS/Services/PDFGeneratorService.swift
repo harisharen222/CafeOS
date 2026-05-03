@@ -2,157 +2,64 @@ import Foundation
 import UIKit
 import PDFKit
 
-// MARK: — Parsed Job Description Model
+// MARK: — Job Description Model
 
 struct JobDescription {
     var title: String
     var company: String
     var location: String
-    var jobType: String
+    var employmentType: String      // "Internship", "Full-time", etc. — empty if not found
     var aboutRole: String
-    var requirements: [String]
     var responsibilities: [String]
+    var requirements: [String]
+    var additionalInfo: String      // Capped at 300 chars
     var sourceURL: String
     var extractedAt: Date
+
+    // Computed display string shown in the scroll view
+    var displayText: String {
+        var parts: [String] = []
+
+        // Header block
+        var header = title
+        if !company.isEmpty || !location.isEmpty {
+            let meta = [company, location].filter { !$0.isEmpty }.joined(separator: " · ")
+            header += "\n" + meta
+        }
+        if !employmentType.isEmpty { header += "\n" + employmentType }
+        parts.append(header)
+
+        // About
+        if !aboutRole.isEmpty {
+            parts.append("About the Role\n" + aboutRole)
+        }
+
+        // Responsibilities
+        if !responsibilities.isEmpty {
+            let items = responsibilities.map { "- " + $0 }.joined(separator: "\n")
+            parts.append("Responsibilities\n" + items)
+        }
+
+        // Requirements
+        if !requirements.isEmpty {
+            let items = requirements.map { "- " + $0 }.joined(separator: "\n")
+            parts.append("Requirements\n" + items)
+        }
+
+        return parts.joined(separator: "\n\n")
+    }
+
+    // Convenience for PDF: jobType field expected by generatePDF
+    var jobType: String { employmentType }
 }
 
 // MARK: — PDF Generator
 
 class PDFGeneratorService {
 
-    // MARK: — Parse markdown into structured sections
-    func parse(markdown: String, sourceURL: String) -> JobDescription {
-        let lines = markdown.components(separatedBy: .newlines)
-
-        var title            = ""
-        var company          = ""
-        var location         = ""
-        var jobType          = ""
-        var aboutLines       = [String]()
-        var requirements     = [String]()
-        var responsibilities = [String]()
-
-        enum Section { case none, about, requirements, responsibilities, other }
-        var currentSection: Section = .none
-
-        let requirementKeywords    = ["requirement", "qualification", "what you need",
-                                      "what we're looking for", "skills", "you have",
-                                      "you bring", "minimum qualification"]
-        let responsibilityKeywords = ["responsibilit", "what you'll do", "what you will do",
-                                      "your role", "duties", "you will", "key duties"]
-        let aboutKeywords          = ["about the role", "about this role", "overview",
-                                      "the role", "position overview", "job summary",
-                                      "about the job", "description"]
-
-        for (index, line) in lines.enumerated() {
-            let trimmed   = line.trimmingCharacters(in: .whitespaces)
-            let lower     = trimmed.lowercased()
-            let isHeader  = trimmed.hasPrefix("#")
-            let isBullet  = trimmed.hasPrefix("-") || trimmed.hasPrefix("*") || trimmed.hasPrefix("•")
-            let cleanLine = trimmed
-                .replacingOccurrences(of: "^#{1,6}\\s*", with: "", options: .regularExpression)
-                .replacingOccurrences(of: "^[-*•]\\s*", with: "", options: .regularExpression)
-                .trimmingCharacters(in: .whitespaces)
-
-            if cleanLine.isEmpty { continue }
-
-            // Extract title — first H1 or H2
-            if title.isEmpty && (trimmed.hasPrefix("# ") || trimmed.hasPrefix("## ")) {
-                title = cleanLine
-                continue
-            }
-
-            // Extract company from "at CompanyName" or second heading
-            if company.isEmpty && index < 10 {
-                if let range = lower.range(of: #"\bat\s+([A-Z][^\n,|]+)"#,
-                                           options: .regularExpression) {
-                    let match = String(lower[range])
-                    company = match.replacingOccurrences(of: "at ", with: "",
-                                                        options: .caseInsensitive)
-                        .trimmingCharacters(in: .whitespaces).capitalized
-                }
-                if company.isEmpty && trimmed.hasPrefix("## ") && !title.isEmpty {
-                    company = cleanLine
-                    continue
-                }
-            }
-
-            // Extract location
-            if location.isEmpty {
-                let locationPatterns = ["remote", "hybrid", "on-site", "onsite",
-                                        "bengaluru", "mumbai", "delhi", "hyderabad",
-                                        "chennai", "pune", "bangalore", "india",
-                                        "new york", "san francisco", "london", "singapore"]
-                if locationPatterns.contains(where: { lower.contains($0) }) && index < 20 {
-                    location = cleanLine
-                }
-            }
-
-            // Extract job type
-            if jobType.isEmpty {
-                let typeKeywords = ["full-time", "part-time", "internship",
-                                    "contract", "freelance", "temporary"]
-                if let match = typeKeywords.first(where: { lower.contains($0) }) {
-                    jobType = match.capitalized
-                }
-            }
-
-            // Detect section changes from headers
-            if isHeader {
-                if requirementKeywords.contains(where: { lower.contains($0) }) {
-                    currentSection = .requirements
-                } else if responsibilityKeywords.contains(where: { lower.contains($0) }) {
-                    currentSection = .responsibilities
-                } else if aboutKeywords.contains(where: { lower.contains($0) }) {
-                    currentSection = .about
-                } else {
-                    currentSection = .other
-                }
-                continue
-            }
-
-            // Assign content to section
-            switch currentSection {
-            case .requirements:
-                if isBullet { requirements.append(cleanLine) }
-                else if cleanLine.count > 20 { requirements.append(cleanLine) }
-            case .responsibilities:
-                if isBullet { responsibilities.append(cleanLine) }
-                else if cleanLine.count > 20 { responsibilities.append(cleanLine) }
-            case .about:
-                aboutLines.append(cleanLine)
-            case .none:
-                if !isHeader && index > 2 { aboutLines.append(cleanLine) }
-            case .other:
-                break
-            }
-        }
-
-        // Fallbacks
-        if title.isEmpty { title = "Job Description" }
-        if aboutLines.isEmpty && requirements.isEmpty {
-            aboutLines = lines
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty && !$0.hasPrefix("#") }
-                .prefix(10)
-                .map { String($0) }
-        }
-
-        return JobDescription(
-            title: title,
-            company: company.isEmpty ? "Company not found" : company,
-            location: location.isEmpty ? "Location not specified" : location,
-            jobType: jobType,
-            aboutRole: aboutLines.joined(separator: "\n"),
-            requirements: Array(requirements.prefix(15)),
-            responsibilities: Array(responsibilities.prefix(15)),
-            sourceURL: sourceURL,
-            extractedAt: Date()
-        )
-    }
-
     // MARK: — Render PDF
     func generatePDF(from job: JobDescription) -> Data {
+
         let pageWidth:   CGFloat = 595.2
         let pageHeight:  CGFloat = 841.8
         let margin:      CGFloat = 50.0

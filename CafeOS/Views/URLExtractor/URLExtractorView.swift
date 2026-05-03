@@ -139,8 +139,7 @@ struct URLExtractorView: View {
                                     }
                                 }
                                 .disabled(
-                                    viewModel.extractedContent
-                                        .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    viewModel.jobDescription == nil
                                     || viewModel.isGeneratingPDF
                                 )
                             }
