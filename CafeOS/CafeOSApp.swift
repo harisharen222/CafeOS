@@ -15,31 +15,33 @@ struct CafeOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if appState.isLoadingAuth {
-                    ZStack {
-                        Color(.systemBackground).ignoresSafeArea()
-                        VStack(spacing: 16) {
-                            Image(systemName: "cup.and.saucer.fill")
-                                .font(.system(size: 48))
-                                .foregroundColor(.brown)
-                            ProgressView()
-                                .scaleEffect(1.2)
-                        }
+            if appState.isLoadingAuth {
+                ZStack {
+                    Color(hex: "#0D0D0D").ignoresSafeArea()
+                    VStack(spacing: 16) {
+                        Image(systemName: "cup.and.saucer.fill")
+                            .font(.system(size: 48))
+                            .foregroundColor(Color(hex: "#A0001C"))
+                        ProgressView()
+                            .scaleEffect(1.2)
+                            .tint(.white)
                     }
-                } else if appState.isLoggedIn {
-                    MainTabView()
-                        .environmentObject(appState)
-                        .environmentObject(inventoryVM)
-                        .environmentObject(supplierVM)
-                        .environmentObject(orderVM)
-                        .environmentObject(aiVM)
-                } else {
-                    NavigationStack {
-                        LoginView()
-                    }
-                    .environmentObject(appState)
                 }
+                .preferredColorScheme(.dark)
+            } else if appState.isLoggedIn {
+                MainTabView()
+                    .environmentObject(appState)
+                    .environmentObject(inventoryVM)
+                    .environmentObject(supplierVM)
+                    .environmentObject(orderVM)
+                    .environmentObject(aiVM)
+                    .preferredColorScheme(.dark)
+            } else {
+                NavigationStack {
+                    LoginView()
+                }
+                .environmentObject(appState)
+                .preferredColorScheme(.dark)
             }
         }
     }

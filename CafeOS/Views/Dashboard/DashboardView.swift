@@ -1,18 +1,32 @@
 import SwiftUI
 
+// MARK: — Dashboard
+
 struct DashboardView: View {
     @EnvironmentObject var appState: AppState
     @EnvironmentObject var inventoryVM: InventoryViewModel
     @EnvironmentObject var supplierVM: SupplierViewModel
     @EnvironmentObject var orderVM: OrderViewModel
-    
+
     @State private var notificationScheduled: Bool = false
 
-    private var greeting: String {
+    // MARK: Derived values
+    private var greetingLabel: String {
         let hour = Calendar.current.component(.hour, from: Date())
-        if hour < 12 { return "Good morning ☕" }
-        else if hour < 17 { return "Good afternoon ☕" }
-        else { return "Good evening " }
+        if hour < 12 { return "GOOD MORNING" }
+        else if hour < 17 { return "GOOD AFTERNOON" }
+        else { return "GOOD EVENING" }
+    }
+
+    private var greetingEmoji: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        return hour < 17 ? "cup.and.saucer.fill" : "moon.stars.fill"
+    }
+
+    private var displayName: String {
+        (appState.currentUserEmail?
+            .components(separatedBy: "@").first?
+            .capitalized) ?? "Manager"
     }
 
     private var userInitials: String {
@@ -21,171 +35,123 @@ struct DashboardView: View {
         return String(name.prefix(2)).uppercased()
     }
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    private var totalItems: Int        { inventoryVM.items.count }
+    private var lowStockCount: Int     { inventoryVM.lowStockItems.count }
+    private var outOfStockCount: Int   { inventoryVM.items.filter { $0.quantity == 0 }.count }
+    private var pendingOrderCount: Int { orderVM.pendingOrders.count }
+    private var totalOwed: Double      { supplierVM.suppliers.reduce(0) { $0 + $1.amountOwed } }
 
+    private var inStockFraction: Double {
+        guard totalItems > 0 else { return 0 }
+        let healthy = inventoryVM.items.filter { !$0.isLowStock }.count
+        return Double(healthy) / Double(totalItems)
+    }
+    private var lowFraction: Double {
+        guard totalItems > 0 else { return 0 }
+        let low = inventoryVM.items.filter { $0.isLowStock && $0.quantity > 0 }.count
+        return Double(low) / Double(totalItems)
+    }
+    private var outFraction: Double {
+        guard totalItems > 0 else { return 0 }
+        return Double(outOfStockCount) / Double(totalItems)
+    }
+
+    // MARK: Body
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                // Greeting
-                Text(greeting)
-                    .font(.title.bold())
-                    .padding(.horizontal)
+        ZStack {
+            Color.dashBackground.ignoresSafeArea()
 
-                // 2×2 metric cards
-                LazyVGrid(columns: columns, spacing: 16) {
-                    MetricCard(
-                        title: "Total Items",
-                        value: "\(inventoryVM.items.count)",
-                        icon: "archivebox.fill",
-                        color: .blue
-                    )
-                    MetricCard(
-                        title: "Low Stock",
-                        value: "\(inventoryVM.lowStockCount)",
-                        icon: "exclamationmark.triangle.fill",
-                        color: inventoryVM.lowStockCount > 0 ? .red : .green
-                    )
-                    MetricCard(
-                        title: "Pending Orders",
-                        value: "\(orderVM.pendingOrders.count)",
-                        icon: "cart.fill",
-                        color: orderVM.pendingOrders.count > 0 ? .orange : .green
-                    )
-                    MetricCard(
-                        title: "Amount Owed",
-                        value: "₹\(Int(supplierVM.totalAmountOwed).formatted())",
-                        icon: "indianrupeesign.circle.fill",
-                        color: .purple
-                    )
-                }
-                .padding(.horizontal)
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
 
-                // Low stock section
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("🔴 Needs Attention")
-                        .font(.headline)
-                        .padding(.horizontal)
+                    // ── Greeting Card ──────────────────────────
+                    greetingCard
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
 
-                    if inventoryVM.lowStockItems.isEmpty {
-                        HStack {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
-                            Text("All items are well stocked ✓").foregroundStyle(.secondary)
+                    // ── Inventory Health ───────────────────────
+                    sectionHeader("chart.bar.fill", "INVENTORY HEALTH")
+                        .padding(.top, 24)
+
+                    inventoryHealthRow
+                        .padding(.horizontal, 16)
+
+                    stockDistributionCard
+                        .padding(.horizontal, 16)
+                        .padding(.top, 10)
+
+                    // ── Today's Activity ───────────────────────
+                    sectionHeader("calendar", "TODAY'S ACTIVITY")
+                        .padding(.top, 24)
+
+                    activityRow
+                        .padding(.horizontal, 16)
+
+                    // ── AI Insights ────────────────────────────
+                    sectionHeader("sparkles", "AI INSIGHTS")
+                        .padding(.top, 24)
+
+                    aiAdvisorCard
+                        .padding(.horizontal, 16)
+
+                    // ── Quick Actions ──────────────────────────
+                    sectionHeader("bolt.fill", "QUICK ACTIONS")
+                        .padding(.top, 24)
+
+                    quickActionsCard
+                        .padding(.horizontal, 16)
+
+                    // ── Needs Attention ────────────────────────
+                    if !inventoryVM.lowStockItems.isEmpty {
+                        sectionHeader("exclamationmark.triangle.fill", "NEEDS ATTENTION", color: .red)
+                            .padding(.top, 24)
+
+                        needsAttentionList
+                            .padding(.horizontal, 16)
+                    }
+
+                    // ── Notification status ────────────────────
+                    if notificationScheduled {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bell.badge.fill")
+                                .foregroundColor(.dashCrimson)
+                                .font(.caption2)
+                            Text("Daily 8 AM low-stock alert active")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
-                        .padding(.horizontal)
-                    } else {
-                        VStack(spacing: 0) {
-                            ForEach(inventoryVM.lowStockItems) { item in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.name).font(.subheadline.bold())
-                                        Text(item.supplierName ?? "No supplier")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    VStack(alignment: .trailing, spacing: 2) {
-                                        Text("\(String(format: "%.1f", item.quantity)) / \(String(format: "%.1f", item.minimumThreshold)) \(item.unit)")
-                                            .font(.caption.bold()).foregroundStyle(.red)
-                                    }
-                                }
-                                .padding()
-                                if item.id != inventoryVM.lowStockItems.last?.id {
-                                    Divider().padding(.leading)
-                                }
-                            }
-                        }
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
                     }
-                }
 
-                // Pending orders preview
-                if !orderVM.pendingOrders.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("🕐 Pending Orders")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        VStack(spacing: 0) {
-                            ForEach(orderVM.pendingOrders.prefix(3)) { order in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(order.itemName).font(.subheadline.bold())
-                                        Text(order.supplierName).font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Text("\(String(format: "%.1f", order.quantity)) \(order.unit)")
-                                        .font(.caption.bold()).foregroundStyle(.orange)
-                                }
-                                .padding()
-                                if order.id != orderVM.pendingOrders.prefix(3).last?.id {
-                                    Divider().padding(.leading)
-                                }
-                            }
-                        }
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
+                    // ── Debug seed button ──────────────────────
+                    #if DEBUG
+                    Button("Seed Demo Data") {
+                        Task { await SeedData.populate(firestoreService: FirestoreService()) }
                     }
-                }
+                    .font(.caption2)
+                    .foregroundColor(Color.white.opacity(0.2))
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 24)
+                    #endif
 
-                // AI Reorder Advisor card
-                NavigationLink(destination: ReorderAdvisorView()) {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label("Smart Reorder Advisor", systemImage: "sparkles")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Text("Tap to get AI-powered reorder recommendations →")
-                                .font(.caption)
-                                .foregroundColor(.white.opacity(0.85))
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                    .padding()
-                    .background(Color.brown)
-                    .cornerRadius(12)
+                    Spacer(minLength: 40)
                 }
-                .padding(.horizontal)
-                
-                // Notification Badge
-                if notificationScheduled {
-                    HStack(spacing: 8) {
-                        Image(systemName: "bell.badge.fill")
-                            .foregroundColor(.brown)
-                        Text("Daily 8 AM low-stock alert is active")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal)
-                }
-                
-                #if DEBUG
-                Button("Seed Demo Data") {
-                    Task {
-                        await SeedData.populate(firestoreService: FirestoreService())
-                    }
-                }
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding()
-                #endif
             }
-            .padding(.vertical)
         }
         .navigationTitle("Dashboard")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink(destination: ProfileView()) {
                     ZStack {
                         Circle()
-                            .fill(Color.brown.opacity(0.2))
+                            .fill(Color.dashMaroon.opacity(0.3))
                             .frame(width: 32, height: 32)
                         Text(userInitials)
                             .font(.caption.bold())
-                            .foregroundColor(.brown)
+                            .foregroundColor(Color.dashCrimson)
                     }
                 }
             }
@@ -194,14 +160,335 @@ struct DashboardView: View {
             inventoryVM.startListening()
             await supplierVM.fetchSuppliers()
             await orderVM.fetchOrders()
-            
             NotificationService.shared.hasPendingLowStockAlert { scheduled in
                 notificationScheduled = scheduled
             }
         }
     }
+
+    // MARK: — Section Header
+
+    private func sectionHeader(_ icon: String, _ title: String,
+                                color: Color = .dashCrimson) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption.bold())
+                .foregroundColor(color)
+            Text(title)
+                .font(.caption.bold())
+                .foregroundColor(color)
+                .kerning(2)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: — Greeting Card
+
+    private var greetingCard: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greetingLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.dashCrimson)
+                    .kerning(2)
+                Text(displayName)
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
+                Text("Café Manager")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            ZStack {
+                Circle()
+                    .fill(Color.dashMaroon.opacity(0.3))
+                    .frame(width: 52, height: 52)
+                Image(systemName: greetingEmoji)
+                    .font(.title3)
+                    .foregroundColor(Color.dashCrimson)
+            }
+        }
+        .padding(16)
+        .background(Color.dashCard)
+        .cornerRadius(16)
+    }
+
+    // MARK: — Inventory Health Row (3 equal stat cards)
+
+    private var inventoryHealthRow: some View {
+        HStack(spacing: 10) {
+            StatCard(icon: "square.stack.3d.up.fill", value: "\(totalItems)",
+                     label: "Total SKUs", iconColor: .blue)
+            StatCard(icon: "exclamationmark.triangle.fill", value: "\(lowStockCount)",
+                     label: "Low Stock", iconColor: .orange)
+            StatCard(icon: "xmark.circle.fill", value: "\(outOfStockCount)",
+                     label: "Out of Stock", iconColor: .red)
+        }
+    }
+
+    // MARK: — Stock Distribution Card
+
+    private var stockDistributionCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Stock Distribution")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+
+            GeometryReader { geo in
+                HStack(spacing: 3) {
+                    if inStockFraction > 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.green)
+                            .frame(width: max(geo.size.width * CGFloat(inStockFraction), 0))
+                    }
+                    if lowFraction > 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.orange)
+                            .frame(width: max(geo.size.width * CGFloat(lowFraction), 0))
+                    }
+                    if outFraction > 0 || outOfStockCount > 0 {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.red)
+                            .frame(width: max(geo.size.width * CGFloat(outFraction), outOfStockCount > 0 ? 8 : 0))
+                    }
+                }
+                .frame(height: 8)
+            }
+            .frame(height: 8)
+
+            HStack {
+                Label("In Stock", systemImage: "circle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.green)
+                Spacer()
+                Label("Low", systemImage: "circle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+                Spacer()
+                Label("Out", systemImage: "circle.fill")
+                    .font(.caption2)
+                    .foregroundColor(.red)
+            }
+        }
+        .padding(16)
+        .background(Color.dashCard)
+        .cornerRadius(16)
+    }
+
+    // MARK: — Activity Row (2 cards)
+
+    private var activityRow: some View {
+        HStack(spacing: 10) {
+            ActivityCard(
+                icon: "cart.fill",
+                iconBg: Color.dashMaroon.opacity(0.25),
+                iconColor: Color.dashCrimson,
+                value: "\(pendingOrderCount)",
+                label: "Pending\nOrders"
+            )
+            ActivityCard(
+                icon: "indianrupeesign.circle.fill",
+                iconBg: Color.blue.opacity(0.15),
+                iconColor: .blue,
+                value: "₹\(Int(totalOwed).formattedWithCommas)",
+                label: "Amount\nOwed"
+            )
+        }
+    }
+
+    // MARK: — AI Advisor Card
+
+    private var aiAdvisorCard: some View {
+        NavigationLink(destination: ReorderAdvisorView()) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color.dashMaroon)
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "sparkles")
+                        .foregroundColor(.white)
+                        .font(.title3)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Smart Reorder Advisor")
+                        .font(.subheadline.bold())
+                        .foregroundColor(.white)
+                    Text("AI-powered low-stock analysis →")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                if lowStockCount > 0 {
+                    Text("\(lowStockCount)")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.dashCrimson)
+                        .cornerRadius(8)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(16)
+            .background(Color.dashCard)
+            .cornerRadius(16)
+        }
+    }
+
+    // MARK: — Quick Actions Card
+
+    private var quickActionsCard: some View {
+        VStack(spacing: 0) {
+            QuickActionRow(icon: "archivebox.fill", iconColor: Color.dashCrimson,
+                           title: "View Inventory", subtitle: "Browse all items and stock levels")
+            Divider().background(Color.white.opacity(0.07)).padding(.leading, 58)
+            QuickActionRow(icon: "person.2.fill", iconColor: .blue,
+                           title: "Manage Suppliers", subtitle: "Contacts, balances, lead times")
+            Divider().background(Color.white.opacity(0.07)).padding(.leading, 58)
+            QuickActionRow(icon: "cart.fill", iconColor: .orange,
+                           title: "View Orders", subtitle: "Track pending and received orders")
+        }
+        .background(Color.dashCard)
+        .cornerRadius(16)
+    }
+
+    // MARK: — Needs Attention List
+
+    private var needsAttentionList: some View {
+        VStack(spacing: 8) {
+            ForEach(inventoryVM.lowStockItems.prefix(5)) { item in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.name)
+                            .font(.subheadline.bold())
+                            .foregroundColor(.white)
+                        Text("\(String(format: "%.1f", item.quantity)) / \(String(format: "%.1f", item.minimumThreshold)) \(item.unit)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(item.quantity == 0 ? "OUT" : "LOW")
+                        .font(.caption2.bold())
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(item.quantity == 0 ? Color.red : Color.orange)
+                        .cornerRadius(6)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.dashCard)
+                .cornerRadius(12)
+            }
+        }
+    }
 }
 
+// MARK: — Sub-components
+
+private struct StatCard: View {
+    let icon: String
+    let value: String
+    let label: String
+    let iconColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.18))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundColor(iconColor)
+            }
+            Text(value)
+                .font(.title.bold())
+                .foregroundColor(.white)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.dashCard)
+        .cornerRadius(16)
+    }
+}
+
+private struct ActivityCard: View {
+    let icon: String
+    let iconBg: Color
+    let iconColor: Color
+    let value: String
+    let label: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(iconBg)
+                    .frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .foregroundColor(iconColor)
+                    .font(.title3)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.title3.bold())
+                    .foregroundColor(.white)
+                Text(label)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity)
+        .background(Color.dashCard)
+        .cornerRadius(16)
+    }
+}
+
+private struct QuickActionRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(iconColor.opacity(0.15))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .font(.system(size: 15))
+                    .foregroundColor(iconColor)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.bold())
+                    .foregroundColor(.white)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(Color.white.opacity(0.25))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+    }
+}
+
+// Keep MetricCard for backward compat if anything else references it
 struct MetricCard: View {
     let title: String
     let value: String
@@ -211,14 +498,21 @@ struct MetricCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon).foregroundColor(color)
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.18))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: icon)
+                        .font(.system(size: 15))
+                        .foregroundColor(color)
+                }
                 Spacer()
             }
-            Text(value).font(.title.bold())
+            Text(value).font(.title.bold()).foregroundColor(.white)
             Text(title).font(.caption).foregroundColor(.secondary)
         }
-        .padding()
-        .background(color.opacity(0.1))
-        .cornerRadius(12)
+        .padding(16)
+        .background(Color.dashCard)
+        .cornerRadius(16)
     }
 }
