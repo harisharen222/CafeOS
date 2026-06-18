@@ -1,6 +1,5 @@
 # CafeOS
-
-A take-home assignment project — an iOS app for managing a fictional café's day-to-day operations. Built with SwiftUI and Firebase.
+An iOS app for managing a fictional café's day-to-day operations. Built with SwiftUI and Firebase.
 
 ---
 
